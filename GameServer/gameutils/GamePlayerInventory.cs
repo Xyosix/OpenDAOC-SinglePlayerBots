@@ -208,8 +208,8 @@ namespace DOL.GS
 
 				if (item.PendingDatabaseAction is PendingDatabaseAction.DELETE)
 				{
-					GameServer.Database.DeleteObject(item);
 					item.PendingDatabaseAction = PendingDatabaseAction.SAVE;
+					GameServer.Database.DeleteObject(item);
 				}
 			}
 
@@ -256,8 +256,8 @@ namespace DOL.GS
 
 				if (item.PendingDatabaseAction is PendingDatabaseAction.ADD)
 				{
-					GameServer.Database.AddObject(item);
 					item.PendingDatabaseAction = PendingDatabaseAction.SAVE;
+					GameServer.Database.AddObject(item);
 				}
 				else if (item.PendingDatabaseAction is PendingDatabaseAction.SAVE)
 					GameServer.Database.SaveObject(item);
@@ -293,7 +293,24 @@ namespace DOL.GS
 					canPersist = gameItem.CanPersist;
 
 				if (canPersist)
-					item.PendingDatabaseAction = PendingDatabaseAction.ADD;
+				{
+					// Clean up our items awaiting deletion list in case this is an item that was dropped then picked up again between two saves.
+					bool removedFromItemsAwaitingDeletion = false;
+
+					for (int i = _itemsAwaitingDeletion.Count - 1; i >= 0; i--)
+					{
+						DbInventoryItem _itemAwaitingDeletion = _itemsAwaitingDeletion[i];
+
+						if (_itemAwaitingDeletion == item)
+						{
+							_itemsAwaitingDeletion.RemoveAt(i);
+							removedFromItemsAwaitingDeletion = true;
+							break;
+						}
+					}
+
+					item.PendingDatabaseAction = removedFromItemsAwaitingDeletion ? PendingDatabaseAction.SAVE : PendingDatabaseAction.ADD;
+				}
 			}
 
 			if (IsEquippedSlot((eInventorySlot) item.SlotPosition))
@@ -340,8 +357,14 @@ namespace DOL.GS
 
 				if (canPersist)
 				{
-					item.PendingDatabaseAction = PendingDatabaseAction.DELETE;
-					_itemsAwaitingDeletion.Add(item);
+					// Only add the item to our items awaiting deletion list if it wasn't about to be added to the database.
+					if (item.PendingDatabaseAction == PendingDatabaseAction.ADD)
+						item.PendingDatabaseAction = PendingDatabaseAction.NONE;
+					else
+					{
+						item.PendingDatabaseAction = PendingDatabaseAction.DELETE;
+						_itemsAwaitingDeletion.Add(item);
+					}
 				}
 			}
 

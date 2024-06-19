@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using DOL.GS;
-using DOL.GS.Effects;
 using DOL.GS.Keeps;
 using DOL.GS.PacketHandler;
 using DOL.GS.Scripts;
@@ -34,8 +33,8 @@ namespace DOL.AI.Brain
         public StandardMobBrain() : base()
         {
             FSM = new FSM();
-            FSM.Add(new StandardMobState_IDLE(this));
             FSM.Add(new StandardMobState_WAKING_UP(this));
+            FSM.Add(new StandardMobState_IDLE(this));
             FSM.Add(new StandardMobState_AGGRO(this));
             FSM.Add(new StandardMobState_RETURN_TO_SPAWN(this));
             FSM.Add(new StandardMobState_PATROLLING(this));
@@ -146,12 +145,12 @@ namespace DOL.AI.Brain
                 if (Properties.CHECK_LOS_BEFORE_AGGRO)
                 {
                     // Check LoS if either the target or the current mob is a pet
-                    if (npc.Brain is ControlledNpcBrain theirControlledNpcBrain && theirControlledNpcBrain.GetPlayerOwner() is GamePlayer theirOwner)
+                    if (npc.Brain is ControlledMobBrain theirControlledNpcBrain && theirControlledNpcBrain.GetPlayerOwner() is GamePlayer theirOwner)
                     {
                         theirOwner.Out.SendCheckLos(Body, npc, new CheckLosResponse(LosCheckForAggroCallback));
                         continue;
                     }
-                    else if (this is ControlledNpcBrain ourControlledNpcBrain && ourControlledNpcBrain.GetPlayerOwner() is GamePlayer ourOwner)
+                    else if (this is ControlledMobBrain ourControlledNpcBrain && ourControlledNpcBrain.GetPlayerOwner() is GamePlayer ourOwner)
                     {
                         ourOwner.Out.SendCheckLos(Body, npc, new CheckLosResponse(LosCheckForAggroCallback));
                         continue;
@@ -431,7 +430,6 @@ namespace DOL.AI.Brain
             // Keep Necromancer shades so that we can attack them if their pets die.
             return !living.IsAlive ||
                    living.ObjectState != GameObject.eObjectState.Active ||
-                   living.IsStealthed ||
                    living.CurrentRegion != Body.CurrentRegion ||
                    !Body.IsWithinRadius(living, MAX_AGGRO_LIST_DISTANCE) ||
                    (!GameServer.ServerRules.IsAllowedToAttack(Body, living, true) && !living.effectListComponent.ContainsEffectForEffectType(eEffect.Shade));
@@ -449,7 +447,7 @@ namespace DOL.AI.Brain
             // It isn't built here because ordering all entities in the aggro list can be expensive, and we typically don't need it.
             // It's built on demand, when `GetOrderedAggroList` is called.
             OrderedAggroList.Clear();
-            int attackRange = Body.AttackRange;
+            int attackRange = Body.attackComponent.AttackRange;
             GameLiving highestThreat = null;
             KeyValuePair<GameLiving, AggroAmount> currentTarget = default;
             long highestEffectiveAggro = -1; // Assumes that negative aggro amounts aren't allowed in the list.
@@ -540,7 +538,7 @@ namespace DOL.AI.Brain
             if (Body.Faction != null)
             {
                 if (realTarget is GamePlayer realTargetPlayer)
-                    return Body.Faction.GetAggroToFaction(realTargetPlayer) > 75;
+                    return Body.Faction.GetStandingToFaction(realTargetPlayer) is Faction.Standing.AGGRESIVE;
                 else if (realTarget is GameNPC realTargetNpc && Body.Faction.EnemyFactions.Contains(realTargetNpc.Faction))
                     return true;
             }
@@ -575,7 +573,7 @@ namespace DOL.AI.Brain
         /// </summary>
         protected virtual void ConvertDamageToAggroAmount(GameLiving attacker, int damage)
         {
-            if (attacker is GameNPC NpcAttacker && NpcAttacker.Brain is ControlledNpcBrain controlledBrain)
+            if (attacker is GameNPC NpcAttacker && NpcAttacker.Brain is ControlledMobBrain controlledBrain)
             {
                 damage = controlledBrain.ModifyDamageWithTaunt(damage);
 
@@ -635,7 +633,7 @@ namespace DOL.AI.Brain
             // Only BAF on players and pets of players
             if (puller is IGamePlayer)
                 playerPuller = (IGamePlayer)puller;
-            else if (puller is GameNPC pet && pet.Brain is ControlledNpcBrain brain)
+            else if (puller is GameNPC pet && pet.Brain is ControlledMobBrain brain)
             {
                 GameLiving livingOwner = brain.GetLivingOwner();
 
@@ -948,6 +946,7 @@ namespace DOL.AI.Brain
                 case eSpellType.OffensiveProc:
                 case eSpellType.DefensiveProc:
                 case eSpellType.DamageShield:
+                case eSpellType.Bladeturn:
                 {
                     if (!LivingHasEffect(Body, spell) && !Body.attackComponent.AttackState && spell.Target != eSpellTarget.PET)
                     {
@@ -987,14 +986,16 @@ namespace DOL.AI.Brain
                 }
                 case eSpellType.CurePoison:
                 {
-                    if (LivingIsPoisoned(Body))
+                    if (Body.IsPoisoned)
                     {
                         target = Body;
                         break;
                     }
 
-                    if (Body.ControlledBrain != null && Body.ControlledBrain.Body != null && LivingIsPoisoned(Body.ControlledBrain.Body)
-                        && Body.GetDistanceTo(Body.ControlledBrain.Body) <= spell.Range && spell.Target != eSpellTarget.SELF)
+                    if (Body.ControlledBrain != null &&
+                        Body.ControlledBrain.Body != null &&
+                        Body.ControlledBrain.Body.IsPoisoned &&
+                        Body.GetDistanceTo(Body.ControlledBrain.Body) <= spell.Range && spell.Target != eSpellTarget.SELF)
                     {
                         target = Body.ControlledBrain.Body;
                         break;
@@ -1145,57 +1146,14 @@ namespace DOL.AI.Brain
                 return false;
             }
 
-            ECSGameEffect effect = EffectListService.GetEffectOnTarget(target, spellEffect);
+            // True if the target has the effect, or the immunity effect for this effect.
+            // Treat NPC immunity effects as full immunity effects.
+            return EffectListService.GetEffectOnTarget(target, spellEffect) != null || HasImmunityEffect(EffectService.GetImmunityEffectFromSpell(spell)) || HasImmunityEffect(EffectService.GetNpcImmunityEffectFromSpell(spell));
 
-            if (effect != null)
-                return true;
-
-            eEffect immunityToCheck = eEffect.Unknown;
-
-            switch (spellEffect)
+            bool HasImmunityEffect(eEffect immunityEffect)
             {
-                case eEffect.Stun:
-                {
-                    immunityToCheck = eEffect.StunImmunity;
-                    break;
-                }
-                case eEffect.Mez:
-                {
-                    immunityToCheck = eEffect.MezImmunity;
-                    break;
-                }
-                case eEffect.Snare:
-                case eEffect.MeleeSnare:
-                {
-                    immunityToCheck = eEffect.SnareImmunity;
-                    break;
-                }
-                case eEffect.Nearsight:
-                {
-                    immunityToCheck = eEffect.NearsightImmunity;
-                    break;
-                }
+                return immunityEffect != eEffect.Unknown && EffectListService.GetEffectOnTarget(target, immunityEffect) != null;
             }
-
-            return immunityToCheck != eEffect.Unknown && EffectListService.GetEffectOnTarget(target, immunityToCheck) != null;
-        }
-
-        protected static bool LivingIsPoisoned(GameLiving target)
-        {
-            foreach (IGameEffect effect in target.EffectList)
-            {
-                //If the effect we are checking is not a gamespelleffect keep going
-                if (effect is not GameSpellEffect)
-                    continue;
-
-                GameSpellEffect spellEffect = effect as GameSpellEffect;
-
-                // if this is a DOT then target is poisoned
-                if (spellEffect.Spell.SpellType == eSpellType.DamageOverTime)
-                    return true;
-            }
-
-            return false;
         }
 
         #endregion

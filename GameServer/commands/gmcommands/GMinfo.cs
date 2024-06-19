@@ -183,8 +183,8 @@ namespace DOL.GS.Commands
 					info.Add(" + Damage type: " + target.MeleeDamageType);
 					if (target.LeftHandSwingChance > 0)
 						info.Add(" + Left Swing %: " + target.LeftHandSwingChance);
-					if(target.ScalingFactor > 0)
-						info.Add(" + DamageTableScalingFactor: " + target.ScalingFactor);
+					if(target.WeaponSkillScalingFactor > 0)
+						info.Add(" + DamageTableScalingFactor: " + target.WeaponSkillScalingFactor);
 					if(target.GetModified(eProperty.MeleeDamage) > 0) 
 						info.Add(" + MeleeDamage bonus %: " + target.GetModified(eProperty.MeleeDamage));
 					if (target.GetWeaponSkill(new DbInventoryItem()) > 0)
@@ -662,7 +662,7 @@ namespace DOL.GS.Commands
 					info.Add( " ");
 					info.Add( " + RealmPointsValue : " + target.RealmPointsValue);
 					info.Add( " + ExperienceValue : " + target.ExperienceValue);
-					info.Add( " + AttackRange : " + target.AttackRange);
+					info.Add( " + AttackRange : " + target.attackComponent.AttackRange);
 					info.Add(" ");
 					if (GameServer.KeepManager.GetFrontierKeeps().Contains(target.Keep))
 					{

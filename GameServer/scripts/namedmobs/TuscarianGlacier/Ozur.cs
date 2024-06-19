@@ -47,7 +47,7 @@ namespace DOL.GS.Scripts
             Level = 77;
             // Giant
             BodyType = 5;
-            ScalingFactor = 45;
+            WeaponSkillScalingFactor = 45;
 
             OzurBrain sBrain = new OzurBrain();
             SetOwnBrain(sBrain);
@@ -62,11 +62,7 @@ namespace DOL.GS.Scripts
             get { return 100000; }
         }
 
-        public override int AttackRange
-        {
-            get { return 450; }
-            set { }
-        }
+        public override int MeleeAttackRange => 450;
 
         public override bool HasAbility(string keyName)
         {
@@ -202,14 +198,14 @@ namespace DOL.AI.Brain
 
                 if (countPlayer >= _GettingFirstPlayerStage && countPlayer < _GettingSecondPlayerStage)
                 {
-                    Body.ScalingFactor += 10;
+                    Body.WeaponSkillScalingFactor += 10;
                     Body.Strength = 200;
                     Resists(false);
                 }
 
                 if (countPlayer >= _GettingSecondPlayerStage)
                 {
-                    Body.ScalingFactor += 25;
+                    Body.WeaponSkillScalingFactor += 25;
                     Body.Strength = 350;
                     Weak(true);
                 }

@@ -341,7 +341,7 @@ namespace DOL.GS
 			if (controlledBrain == null)
 				return;
 
-			(controlledBrain as ControlledNpcBrain)?.StripCastedBuffs();
+			(controlledBrain as ControlledMobBrain)?.StripCastedBuffs();
 
 			GameNPC npc = controlledBrain.Body;
 

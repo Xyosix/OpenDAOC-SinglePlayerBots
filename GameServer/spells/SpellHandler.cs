@@ -711,8 +711,8 @@ namespace DOL.GS.Spells
 
                         Caster.Notify(GameLivingEvent.CastFailed, new CastFailedEventArgs(this, CastFailedEventArgs.Reasons.TargetTooFarAway));
 
-                        if (Caster is GameNPC npc)
-                            npc.Follow(Target, Spell.Range - 100, GameNPC.STICK_MAXIMUM_RANGE);
+						if (Caster is GameNPC npc)
+							npc.Follow(Target, Spell.Range - 100, npc.StickMaximumRange);
 
                         return false;
                     }
@@ -1714,25 +1714,25 @@ namespace DOL.GS.Spells
                             list.Add(pet);
                     }
 
-                    // Check 'ControlledBrain' if 'target' isn't a valid target.
-                    if (!list.Any() && Caster.ControlledBrain != null)
-                    {
-                        if (Caster is IGamePlayer player && player.CharacterClass.Name.ToLower() == "bonedancer")
-                        {
-                            foreach (GameNPC npcInRadius in ((GameLiving)player).GetNPCsInRadius((ushort)Spell.Range))
-                            {
-                                if (npcInRadius is CommanderPet commander && commander.Owner == player)
-                                    list.Add(commander);
-                                else if (npcInRadius is BDSubPet { Brain: IControlledBrain brain } subpet && brain.GetLivingOwner() == player)
-                                {
-                                    if (!Spell.IsHealing)
-                                        list.Add(subpet);
-                                }
-                            }
-                        }
-                        else
-                        {
-                            pet = Caster.ControlledBrain.Body;
+					// Check 'ControlledBrain' if 'target' isn't a valid target.
+					if (!list.Any() && Caster.ControlledBrain != null)
+					{
+						if (Caster is IGamePlayer player && player.CharacterClass.Name.ToLower() == "bonedancer")
+						{
+							foreach (GameNPC npcInRadius in player.GetNPCsInRadius((ushort) Spell.Range))
+							{
+								if (npcInRadius is CommanderPet commander && commander.Owner == player)
+									list.Add(commander);
+								else if (npcInRadius is BdSubPet {Brain: IControlledBrain brain} subpet && brain.GetPlayerOwner() == player)
+								{
+									if (!Spell.IsHealing)
+										list.Add(subpet);
+								}
+							}
+						}
+						else
+						{
+							pet = Caster.ControlledBrain.Body;
 
                             if (pet != null && Caster.IsWithinRadius(pet, Spell.Range))
                                 list.Add(pet);
@@ -1924,20 +1924,20 @@ namespace DOL.GS.Spells
                                 if (m_caster.IsWithinRadius(petBody2, spellRange))
                                     list.Add(petBody2);
 
-                                //Now lets add any subpets!
-                                if (petBody2 != null && petBody2.ControlledNpcList != null)
-                                {
-                                    foreach (IControlledBrain icb in petBody2.ControlledNpcList)
-                                    {
-                                        if (icb != null && m_caster.IsWithinRadius(icb.Body, spellRange))
-                                            list.Add(icb.Body);
-                                    }
-                                }
-                            }
-                        }
-                        else if (m_caster is GameNPC && (m_caster as GameNPC).Brain is ControlledNpcBrain casterBrain)
-                        {
-                            GameLiving living = casterBrain.GetLivingOwner();
+								//Now lets add any subpets!
+								if (petBody2 != null && petBody2.ControlledNpcList != null)
+								{
+									foreach (IControlledBrain icb in petBody2.ControlledNpcList)
+									{
+										if (icb != null && m_caster.IsWithinRadius(icb.Body, spellRange))
+											list.Add(icb.Body);
+									}
+								}
+							}
+						}
+						else if (m_caster is GameNPC && (m_caster as GameNPC).Brain is ControlledMobBrain casterBrain)
+						{
+							GameLiving living = casterBrain.GetLivingOwner();
 
                             IGamePlayer player = living as IGamePlayer;
 
@@ -2207,9 +2207,9 @@ namespace DOL.GS.Spells
                     ApplyEffectOnTarget(targetInList);
                 }
 
-                if (Spell.IsConcentration && Caster is GameNPC npc && npc.Brain is ControlledNpcBrain npcBrain && Spell.IsBuff)
-                    npcBrain.AddBuffedTarget(Target);
-            }
+				if (Spell.IsConcentration && Caster is GameNPC npc && npc.Brain is ControlledMobBrain npcBrain && Spell.IsBuff)
+					npcBrain.AddBuffedTarget(Target);
+			}
 
             CastSubSpells(Target);
             return true;
@@ -2500,27 +2500,31 @@ namespace DOL.GS.Spells
             return 0;
         }
 
-        /// <summary>
-        /// Calculates the chance that the spell lands on target
-        /// can be negative or above 100%
-        /// </summary>
-        /// <param name="target">spell target</param>
-        /// <returns>chance that the spell lands on target</returns>
-        public virtual int CalculateToHitChance(GameLiving target)
-        {
-            int spellLevel = Spell.Level + m_caster.GetModified(eProperty.SpellLevel);
+		/// <summary>
+		/// Calculates the chance that the spell lands on target
+		/// can be negative or above 100%
+		/// </summary>
+		/// <param name="target">spell target</param>
+		/// <returns>chance that the spell lands on target</returns>
+		public virtual int CalculateToHitChance(GameLiving target)
+		{
+			int spellLevel;
 
-            if (m_caster is IGamePlayer playerCaster)
-            {
-                if (spellLevel > playerCaster.MaxLevel)
-                    spellLevel = playerCaster.MaxLevel;
+			if (m_caster is IGamePlayer playerCaster)
+			{
+				spellLevel = Spell.Level + m_caster.GetModified(eProperty.SpellLevel);
 
-                if (m_spellLine.KeyName == GlobalSpellsLines.Combat_Styles_Effect || m_spellLine.KeyName.StartsWith(GlobalSpellsLines.Champion_Lines_StartWith))
-                {
-                    AttackData lastAD = ((GameLiving)playerCaster).TempProperties.GetProperty<AttackData>("LastAttackData", null);
-                    spellLevel = (lastAD != null && lastAD.Style != null) ? lastAD.Style.Level : Math.Min(playerCaster.MaxLevel, target.Level);
-                }
-            }
+				if (spellLevel > playerCaster.MaxLevel)
+					spellLevel = playerCaster.MaxLevel;
+
+				if (m_spellLine.KeyName == GlobalSpellsLines.Combat_Styles_Effect || m_spellLine.KeyName.StartsWith(GlobalSpellsLines.Champion_Lines_StartWith))
+				{
+					AttackData lastAD = playerCaster.TempProperties.GetProperty<AttackData>("LastAttackData", null);
+					spellLevel = (lastAD != null && lastAD.Style != null) ? lastAD.Style.Level : Math.Min(playerCaster.MaxLevel, target.Level);
+				}
+			}
+			else
+				spellLevel = m_caster.EffectiveLevel;
 
             /*
 			http://www.camelotherald.com/news/news_article.php?storyid=704
@@ -2540,20 +2544,14 @@ namespace DOL.GS.Spells
 			- Tolakram
 			 */
 
-            int hitChance = m_caster.GetModified(eProperty.ToHitBonus);
+			int hitChance = 88 + (spellLevel - target.Level) / 2;
+			hitChance += m_caster.GetModified(eProperty.ToHitBonus);
 
-            if (m_caster is GameNPC && m_caster is not MimicNPC)
-                hitChance += (int)(87.5 - (target.Level - m_caster.Level));
-            else
-            {
-                hitChance += 88 + (spellLevel - target.Level) / 2;
-
-				if (target is GameNPC && target is not MimicNPC)
-				{
-					int mobScalar = m_caster.GetConLevel(target);
-					hitChance -= (int) (mobScalar * Properties.PVE_SPELL_CONHITPERCENT);
-					hitChance += Math.Max(0, target.attackComponent.Attackers.Count - 1) * Properties.MISSRATE_REDUCTION_PER_ATTACKERS;
-				}
+			if (m_caster is not IGamePlayer || target is not IGamePlayer)
+			{
+				int mobScalar = m_caster.GetConLevel(target);
+				hitChance -= (int) (mobScalar * Properties.PVE_SPELL_CONHITPERCENT);
+				hitChance += Math.Max(0, target.attackComponent.Attackers.Count - 1) * Properties.MISSRATE_REDUCTION_PER_ATTACKERS;
 			}
 
             if (m_caster.effectListComponent.ContainsEffectForEffectType(eEffect.PiercingMagic))

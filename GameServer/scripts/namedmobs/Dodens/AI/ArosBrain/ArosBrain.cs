@@ -26,13 +26,11 @@ namespace DOL.AI.Brain
             ThinkInterval = 1500;
 
             FSM.ClearStates();
-
             FSM.Add(new StandardMobState_WAKING_UP(this));
-            FSM.Add(new ArosState_RETURN_TO_SPAWN(this));
             FSM.Add(new ArosState_IDLE(this));
             FSM.Add(new ArosState_AGGRO(this));
+            FSM.Add(new ArosState_RETURN_TO_SPAWN(this));
             FSM.Add(new StandardMobState_DEAD(this));
-
             FSM.SetCurrentState(eFSMStateType.WAKING_UP);
         }
 
@@ -219,7 +217,7 @@ namespace DOL.AI.Brain
                 if (living != null &&
                     living.IsAlive &&
                     living.EffectList.GetOfType<NecromancerShadeEffect>() == null &&
-                    !aros.IsWithinRadius(living, aros.AttackRange))
+                    !aros.IsWithinRadius(living, aros.attackComponent.AttackRange))
                 {
                     inRangeLiving.Add(living);
                 }

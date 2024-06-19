@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using DOL.Database;
 using DOL.GS.Styles;
 using DOL.GS.Keeps;
+using DOL.GS.Scripts;
 
 namespace DOL.GS.ServerRules
 {
@@ -218,7 +219,7 @@ namespace DOL.GS.ServerRules
 		/// <param name="player">player whom specializations are checked</param>
 		/// <param name="objectType">object type</param>
 		/// <returns>specialization in object or 0</returns>
-		int GetObjectSpecLevel(GamePlayer player, eObjectType objectType);
+		int GetObjectSpecLevel(IGamePlayer player, eObjectType objectType);
 
 		/// <summary>
 		/// Get object specialization level based on server type

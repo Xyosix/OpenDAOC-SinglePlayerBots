@@ -31,9 +31,7 @@ namespace DOL.GS
 
         private const int VISIBLE_TO_PLAYER_SPAN = 60000;
 
-        private int m_databaseLevel;
-
-        public override eGameObjectType GameObjectType => eGameObjectType.NPC;
+		public override eGameObjectType GameObjectType => eGameObjectType.NPC;
 
         #region Formations/Spacing
 
@@ -178,18 +176,11 @@ namespace DOL.GS
             {
                 bool bMaxHealth = m_health >= MaxHealth;
 
-                if (Level != value)
-                {
-                    if (Level < 1 && ObjectState == eObjectState.Active)
-                    {
-                        // This is a newly created NPC, so notify nearby players of its creation
-                        foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
-                        {
-                            player.Out.SendNPCCreate(this);
-                            if (m_inventory != null)
-                                player.Out.SendLivingEquipmentUpdate(this);
-                        }
-                    }
+				if (Level != value)
+				{
+					// This is a newly created NPC, so notify nearby players of its creation
+					if (Level < 1 && ObjectState == eObjectState.Active)
+						ClientService.CreateNpcForPlayers(this);
 
                     base.Level = value;
 
@@ -290,53 +281,41 @@ namespace DOL.GS
 			}
 		}*/
 
-        /// <summary>
-        /// Gets or sets the Realm of this NPC
-        /// </summary>
-        public override eRealm Realm
-        {
-            get
-            {
-                IControlledBrain brain = Brain as IControlledBrain;
-                if (brain != null)
-                    return brain.Owner.Realm; // always realm of the owner
-                return base.Realm;
-            }
-            set
-            {
-                base.Realm = value;
-                if (ObjectState == eObjectState.Active)
-                {
-                    foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
-                    {
-                        player.Out.SendNPCCreate(this);
-                        if (m_inventory != null)
-                            player.Out.SendLivingEquipmentUpdate(this);
-                    }
-                }
-            }
-        }
+		/// <summary>
+		/// Gets or sets the Realm of this NPC
+		/// </summary>
+		public override eRealm Realm
+		{
+			get
+			{
+				IControlledBrain brain = Brain as IControlledBrain;
+				if (brain != null)
+					return brain.Owner.Realm; // always realm of the owner
+				return base.Realm;
+			}
+			set
+			{
+				base.Realm = value;
 
-        /// <summary>
-        /// Gets or sets the name of this npc
-        /// </summary>
-        public override string Name
-        {
-            get { return base.Name; }
-            set
-            {
-                base.Name = value;
-                if (ObjectState == eObjectState.Active)
-                {
-                    foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
-                    {
-                        player.Out.SendNPCCreate(this);
-                        if (m_inventory != null)
-                            player.Out.SendLivingEquipmentUpdate(this);
-                    }
-                }
-            }
-        }
+				if (ObjectState == eObjectState.Active)
+					ClientService.CreateNpcForPlayers(this);
+			}
+		}
+
+		/// <summary>
+		/// Gets or sets the name of this npc
+		/// </summary>
+		public override string Name
+		{
+			get { return base.Name; }
+			set
+			{
+				base.Name = value;
+
+				if (ObjectState == eObjectState.Active)
+					ClientService.CreateNpcForPlayers(this);
+			}
+		}
 
         /// <summary>
         /// Holds the suffix.
@@ -363,26 +342,20 @@ namespace DOL.GS
             }
         }
 
-        /// <summary>
-        /// Gets or sets the guild name
-        /// </summary>
-        public override string GuildName
-        {
-            get { return base.GuildName; }
-            set
-            {
-                base.GuildName = value;
-                if (ObjectState == eObjectState.Active)
-                {
-                    foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
-                    {
-                        player.Out.SendNPCCreate(this);
-                        if (m_inventory != null)
-                            player.Out.SendLivingEquipmentUpdate(this);
-                    }
-                }
-            }
-        }
+		/// <summary>
+		/// Gets or sets the guild name
+		/// </summary>
+		public override string GuildName
+		{
+			get { return base.GuildName; }
+			set
+			{
+				base.GuildName = value;
+
+				if (ObjectState == eObjectState.Active)
+					ClientService.CreateNpcForPlayers(this);
+			}
+		}
 
         /// <summary>
         /// Holds the examine article.
@@ -686,30 +659,24 @@ namespace DOL.GS
         /// </summary>
         protected long m_lastVisibleToPlayerTick = -VISIBLE_TO_PLAYER_SPAN; // Prevents 'IsVisibleToPlayers' from returning true during the first server tick.
 
-        /// <summary>
-        /// Gets or Sets the flags of this npc
-        /// </summary>
-        public virtual eFlags Flags
-        {
-            get { return m_flags; }
-            set
-            {
-                eFlags oldflags = m_flags;
-                m_flags = value;
-                if (ObjectState == eObjectState.Active)
-                {
-                    if (oldflags != m_flags)
-                    {
-                        foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
-                        {
-                            player.Out.SendNPCCreate(this);
-                            if (m_inventory != null)
-                                player.Out.SendLivingEquipmentUpdate(this);
-                        }
-                    }
-                }
-            }
-        }
+		/// <summary>
+		/// Gets or Sets the flags of this npc
+		/// </summary>
+		public virtual eFlags Flags
+		{
+			get { return m_flags; }
+			set
+			{
+				eFlags oldflags = m_flags;
+				m_flags = value;
+
+				if (ObjectState == eObjectState.Active)
+				{
+					if (oldflags != m_flags)
+						ClientService.CreateNpcForPlayers(this);
+				}
+			}
+		}
 
         public override bool IsUnderwater
         {
@@ -899,8 +866,8 @@ namespace DOL.GS
 
         #region Movement
 
-        public const int STICK_MINIMUM_RANGE = 75;
-        public const int STICK_MAXIMUM_RANGE = 5000;
+		public virtual int StickMinimumRange => (int) (MeleeAttackRange * 0.375);
+		public virtual int StickMaximumRange => 5000;
 
         public long LastVisibleToPlayersTickCount => m_lastVisibleToPlayerTick;
 
@@ -1022,50 +989,48 @@ namespace DOL.GS
             set { m_npcTemplate = value; }
         }
 
-        /// <summary>
-        /// Loads the equipment template of this npc
-        /// </summary>
-        /// <param name="equipmentTemplateID">The template id</param>
-        public virtual void LoadEquipmentTemplateFromDatabase(string equipmentTemplateID)
-        {
-            EquipmentTemplateID = equipmentTemplateID;
-            if (EquipmentTemplateID != null && EquipmentTemplateID.Length > 0)
-            {
-                GameNpcInventoryTemplate template = new GameNpcInventoryTemplate();
-                if (template.LoadFromDatabase(EquipmentTemplateID))
-                {
-                    m_inventory = template.CloseTemplate();
-                }
-                else
-                {
-                    //if (log.IsDebugEnabled)
-                    //{
-                    //    //log.Warn("Error loading NPC inventory: InventoryID="+EquipmentTemplateID+", NPC name="+Name+".");
-                    //}
-                }
-                if (Inventory != null)
-                {
-                    //if the distance slot isnt empty we use that
-                    if (Inventory.GetItem(eInventorySlot.DistanceWeapon) != null)
-                        SwitchWeapon(eActiveWeaponSlot.Distance);
-                    else
-                    {
-                        DbInventoryItem twohand = Inventory.GetItem(eInventorySlot.TwoHandWeapon);
-                        DbInventoryItem onehand = Inventory.GetItem(eInventorySlot.RightHandWeapon);
+		/// <summary>
+		/// Loads the equipment template of this npc
+		/// </summary>
+		/// <param name="equipmentTemplateID">The template id</param>
+		public virtual void LoadEquipmentTemplateFromDatabase(string equipmentTemplateID)
+		{
+			if (string.IsNullOrEmpty(equipmentTemplateID))
+				return;
 
-                        if (twohand != null && onehand != null)
-                            //Let's add some random chance
-                            SwitchWeapon(Util.Chance(50) ? eActiveWeaponSlot.TwoHanded : eActiveWeaponSlot.Standard);
-                        else if (twohand != null)
-                            //Hmm our right hand weapon may have been null
-                            SwitchWeapon(eActiveWeaponSlot.TwoHanded);
-                        else if (onehand != null)
-                            //Hmm twohand was null lets default down here
-                            SwitchWeapon(eActiveWeaponSlot.Standard);
-                    }
-                }
-            }
-        }
+			// Only load the template if it's a new one.
+			if (EquipmentTemplateID != equipmentTemplateID)
+			{
+				EquipmentTemplateID = equipmentTemplateID;
+				GameNpcInventoryTemplate template = new();
+
+				if (template.LoadFromDatabase(EquipmentTemplateID))
+					Inventory = template.CloseTemplate();
+			}
+
+			InitializeActiveWeaponFromInventory();
+		}
+
+		public virtual void InitializeActiveWeaponFromInventory()
+		{
+			if (Inventory == null)
+				return;
+
+			if (Inventory.GetItem(eInventorySlot.DistanceWeapon) != null)
+				SwitchWeapon(eActiveWeaponSlot.Distance);
+			else
+			{
+				DbInventoryItem twoHand = Inventory.GetItem(eInventorySlot.TwoHandWeapon);
+				DbInventoryItem oneHand = Inventory.GetItem(eInventorySlot.RightHandWeapon);
+
+				if (twoHand != null && oneHand != null)
+					SwitchWeapon(Util.Chance(50) ? eActiveWeaponSlot.TwoHanded : eActiveWeaponSlot.Standard);
+				else if (twoHand != null)
+					SwitchWeapon(eActiveWeaponSlot.TwoHanded);
+				else if (oneHand != null)
+					SwitchWeapon(eActiveWeaponSlot.Standard);
+			}
+		}
 
         private bool m_loadedFromScript = true;
 
@@ -1075,43 +1040,41 @@ namespace DOL.GS
             set { m_loadedFromScript = value; }
         }
 
-        /// <summary>
-        /// Load a npc from the npc template
-        /// </summary>
-        /// <param name="obj">template to load from</param>
-        public override void LoadFromDatabase(DataObject obj)
-        {
-            if (obj is not DbMob)
-                return;
+		/// <summary>
+		/// Load a npc from the npc template
+		/// </summary>
+		/// <param name="obj">template to load from</param>
+		public override void LoadFromDatabase(DataObject obj)
+		{
+			if (obj is not DbMob)
+				return;
 
             base.LoadFromDatabase(obj);
 
-            m_loadedFromScript = false;
-            DbMob dbMob = (DbMob)obj;
-            NPCTemplate = NpcTemplateMgr.GetTemplate(dbMob.NPCTemplateID);
-            TranslationId = dbMob.TranslationId;
-            Name = dbMob.Name;
-            Suffix = dbMob.Suffix;
-            GuildName = dbMob.Guild;
-            ExamineArticle = dbMob.ExamineArticle;
-            MessageArticle = dbMob.MessageArticle;
-            m_x = dbMob.X;
-            m_y = dbMob.Y;
-            m_z = dbMob.Z;
-            _heading = (ushort)(dbMob.Heading & 0xFFF);
-            MaxSpeedBase = (short)dbMob.Speed;
-            CurrentRegionID = dbMob.Region;
-            Realm = (eRealm)dbMob.Realm;
-            Model = dbMob.Model;
-            Size = dbMob.Size;
-            Flags = (eFlags)dbMob.Flags;
-            m_packageID = dbMob.PackageID;
-            m_level = dbMob.Level;
-            m_databaseLevel = dbMob.Level;
-            AutoSetStats(dbMob);
-            Level = dbMob.Level;
-            m_health = MaxHealth;
-            MeleeDamageType = (eDamageType)dbMob.MeleeDamageType;
+			m_loadedFromScript = false;
+			DbMob dbMob = (DbMob)obj;
+			TranslationId = dbMob.TranslationId;
+			Name = dbMob.Name;
+			Suffix = dbMob.Suffix;
+			GuildName = dbMob.Guild;
+			ExamineArticle = dbMob.ExamineArticle;
+			MessageArticle = dbMob.MessageArticle;
+			m_x = dbMob.X;
+			m_y = dbMob.Y;
+			m_z = dbMob.Z;
+			_heading = (ushort) (dbMob.Heading & 0xFFF);
+			MaxSpeedBase = (short) dbMob.Speed;
+			CurrentRegionID = dbMob.Region;
+			Realm = (eRealm)dbMob.Realm;
+			Model = dbMob.Model;
+			Size = dbMob.Size;
+			Flags = (eFlags)dbMob.Flags;
+			m_packageID = dbMob.PackageID;
+			m_level = dbMob.Level;
+			AutoSetStats(dbMob);
+			Level = dbMob.Level;
+			m_health = MaxHealth;
+			MeleeDamageType = (eDamageType)dbMob.MeleeDamageType;
 
             if (MeleeDamageType == 0)
                 MeleeDamageType = eDamageType.Slash;
@@ -1128,27 +1091,27 @@ namespace DOL.GS
             m_respawnInterval = dbMob.RespawnInterval * 1000;
             PathID = dbMob.PathID;
 
-            if (dbMob.Brain != "")
-            {
-                try
-                {
-                    ABrain brain = null;
-                    foreach (Assembly asm in ScriptMgr.GameServerScripts)
-                    {
-                        brain = (ABrain)asm.CreateInstance(dbMob.Brain, false);
+			if (!string.IsNullOrEmpty(dbMob.Brain))
+			{
+				try
+				{
+					ABrain brain = null;
+					foreach (Assembly asm in ScriptMgr.GameServerScripts)
+					{
+						brain = (ABrain) asm.CreateInstance(dbMob.Brain, false);
 
                         if (brain != null)
                             break;
                     }
 
-                    if (brain != null)
-                        SetOwnBrain(brain);
-                }
-                catch
-                {
-                    log.ErrorFormat("GameNPC error in LoadFromDatabase: can not instantiate brain of type {0} for npc {1}, name = {2}.", dbMob.Brain, dbMob.ClassType, dbMob.Name);
-                }
-            }
+					if (brain != null)
+						SetOwnBrain(brain);
+				}
+				catch
+				{
+					log.Error($"GameNPC error in LoadFromDatabase: can not instantiate brain of type {dbMob.Brain} for npc {dbMob.ClassType}, name {dbMob.Name}.");
+				}
+			}
 
             if (Brain is IOldAggressiveBrain aggroBrain)
             {
@@ -1161,8 +1124,8 @@ namespace DOL.GS
                     {
                         aggroBrain.AggroRange = 400;
 
-                        if (Name != Name.ToLower())
-                            aggroBrain.AggroRange = 500;
+						if (!Name.Equals(Name, StringComparison.OrdinalIgnoreCase))
+							aggroBrain.AggroRange = 500;
 
                         if (CurrentRegion.IsDungeon)
                             aggroBrain.AggroRange = 300;
@@ -1178,8 +1141,8 @@ namespace DOL.GS
                     if (Level > 5)
                         aggroBrain.AggroLevel = 30;
 
-                    if (Name != Name.ToLower())
-                        aggroBrain.AggroLevel = 30;
+					if (!Name.Equals(Name, StringComparison.OrdinalIgnoreCase))
+						aggroBrain.AggroLevel = 30;
 
                     if (Realm != eRealm.None)
                         aggroBrain.AggroLevel = 60;
@@ -1195,8 +1158,8 @@ namespace DOL.GS
 			Gender = (eGender)dbMob.Gender;
 			OwnerID = dbMob.OwnerID;
 
-            LoadTemplate(NPCTemplate);
-        }
+			LoadTemplate(NpcTemplateMgr.GetTemplate(dbMob.NPCTemplateID)); // Returns a random template if multiple with the same ID exist.);
+		}
 
         /// <summary>
         /// Deletes the mob from the database
@@ -1318,224 +1281,242 @@ namespace DOL.GS
                 GameServer.Database.SaveObject(mob);
         }
 
-        /// <summary>
-        /// Load a NPC template onto this NPC
-        /// </summary>
-        /// <param name="template"></param>
-        public virtual void LoadTemplate(INpcTemplate template)
-        {
-            if (template == null)
-                return;
+		// Cached template data from the last call to `LoadTemplate`.
+		private List<string> _templateLevels;
+		private List<string> _templateModels;
+		private List<string> _templateSizes;
+		private List<string> _templateEquipmentIds;
 
-            // Save the template for later
-            NPCTemplate = template as NpcTemplate;
+		public virtual void LoadTemplate(INpcTemplate template)
+		{
+			if (template == null)
+				return;
 
-            // These stats aren't found in the mob table, so always get them from the template
-            this.TetherRange = template.TetherRange;
-            this.ParryChance = template.ParryChance;
-            this.EvadeChance = template.EvadeChance;
-            this.BlockChance = template.BlockChance;
-            this.LeftHandSwingChance = template.LeftHandSwingChance;
+			// Some properties don't have to be reloaded if we're reusing the same template.
+			// Some properties are also randomized and will be changed even if the template doesn't change.
+			bool isNewTemplate = NPCTemplate != template; 
 
-            // We need level set before assigning spells to scale pet spells
-            if (template.ReplaceMobValues)
-            {
-                byte choosenLevel = 1;
-                if (!string.IsNullOrEmpty(template.Level))
-                {
-                    var split = Util.SplitCSV(template.Level, true);
-                    byte.TryParse(split[Util.Random(0, split.Count - 1)], out choosenLevel);
-                }
-                this.Level = choosenLevel; // Also calls AutosetStats()
-            }
+			// We need the level to be set before assigning spells to scale pet spells.
+			if (isNewTemplate)
+			{
+				NPCTemplate = template as NpcTemplate;
+				HandleTemplateOnlyProperties();
+				HandleLevelFromNewTemplate();
+				HandleSpells();
+				HandleStyles();
+				HandleAbilities();
+			}
+			else
+			{
+				HandleLevel();
+				HandleSpells();
+			}
 
-            if (template.Spells != null) this.Spells = template.Spells;
-            if (template.Styles != null) this.Styles = template.Styles;
-            if (template.Abilities != null)
-            {
-                lock (m_lockAbilities)
-                {
-                    foreach (Ability ab in template.Abilities)
-                        m_abilities[ab.KeyName] = ab;
-                }
-            }
+			// Everything below this point overwrites what is in the mob table.
+			if (!template.ReplaceMobValues && !LoadedFromScript)
+				return;
 
-            // Everything below this point is already in the mob table
-            if (!template.ReplaceMobValues && !LoadedFromScript)
-                return;
+			if (isNewTemplate)
+				HandleNewMobProperties();
 
-            List<string> m_templatedInventory = new();
-            TranslationId = template.TranslationId;
-            Name = template.Name;
-            Suffix = template.Suffix;
-            GuildName = template.GuildName;
-            ExamineArticle = template.ExamineArticle;
-            MessageArticle = template.MessageArticle;
-            Faction = FactionMgr.GetFactionByID(template.FactionId);
+			HandleModel();
+			HandleSize();
+			HandleInventory();
+			HandleBrain();
 
-            #region Models, Sizes, Levels, Gender
+			void HandleTemplateOnlyProperties()
+			{
+				TetherRange = template.TetherRange;
+				ParryChance = template.ParryChance;
+				EvadeChance = template.EvadeChance;
+				BlockChance = template.BlockChance;
+				LeftHandSwingChance = template.LeftHandSwingChance;
+			}
 
-            // Grav: this.Model/Size/Level accessors are triggering SendUpdate()
-            // so i must use them, and not directly use private variables
-            ushort choosenModel = 1;
-            var splitModel = Util.SplitCSV(template.Model, true);
-            ushort.TryParse(splitModel[Util.Random(0, splitModel.Count - 1)], out choosenModel);
-            this.Model = choosenModel;
+			bool HandleLevelFromNewTemplate()
+			{
+				if (!string.IsNullOrEmpty(template.Level))
+				{
+					_templateLevels = Util.SplitCSV(template.Level, true);
+					return HandleLevel();
+				}
 
-            // Graveen: template.Gender is 0,1 or 2 for respectively eGender.Neutral("it"), eGender.Male ("he"),
-            // eGender.Female ("she"). Any other value is randomly choosing a gender for current GameNPC
-            int choosenGender = template.Gender > 2 ? Util.Random(0, 2) : template.Gender;
+				return false;
+			}
 
-            switch (choosenGender)
-            {
-                default:
-                case 0: this.Gender = eGender.Neutral; break;
-                case 1: this.Gender = eGender.Male; break;
-                case 2: this.Gender = eGender.Female; break;
-            }
+			bool HandleLevel()
+			{
+				if (template.ReplaceMobValues &&
+					_templateLevels != null &&
+					_templateLevels.Count > 0 &&
+					byte.TryParse(_templateLevels[Util.Random(0, _templateLevels.Count - 1)], out byte newLevel) &&
+					Level != newLevel)
+				{
+					Level = newLevel;
+					return true;
+				}
 
-            byte choosenSize = 50;
-            if (!string.IsNullOrEmpty(template.Size))
-            {
-                var split = Util.SplitCSV(template.Size, true);
-                byte.TryParse(split[Util.Random(0, split.Count - 1)], out choosenSize);
-            }
-            this.Size = choosenSize;
+				_templateLevels = null;
+				return false;
+			}
 
-			#region Misc Stats
-			Race = (short) template.Race;
-			BodyType = template.BodyType;
-			MaxSpeedBase = template.MaxSpeed;
-			Flags = (eFlags)template.Flags;
-			MeleeDamageType = template.MeleeDamageType;
-			#endregion
+			void HandleSpells()
+			{
+				if (template.Spells != null)
+					Spells = template.Spells;
+			}
 
-            #endregion Misc Stats
+			void HandleStyles()
+			{
+				if (template.Styles != null)
+					Styles = template.Styles;
+			}
 
-            #region Inventory
+			void HandleAbilities()
+			{
+				if (template.Abilities != null)
+				{
+					lock (m_lockAbilities)
+					{
+						foreach (Ability ab in template.Abilities)
+							m_abilities[ab.KeyName] = ab;
+					}
+				}
+			}
 
-            //Ok lets start loading the npc equipment - only if there is a value!
-            if (!string.IsNullOrEmpty(template.Inventory))
-            {
-                bool equipHasItems = false;
-                GameNpcInventoryTemplate equip = new GameNpcInventoryTemplate();
-                //First let's try to reach the npcequipment table and load that!
-                //We use a ';' split to allow npctemplates to support more than one equipmentIDs
-                var equipIDs = Util.SplitCSV(template.Inventory);
-                if (!template.Inventory.Contains(":"))
-                {
-                    foreach (string str in equipIDs)
-                    {
-                        m_templatedInventory.Add(str);
-                    }
+			void HandleNewMobProperties()
+			{
+				TranslationId = template.TranslationId;
+				Name = template.Name;
+				Suffix = template.Suffix;
+				GuildName = template.GuildName;
+				ExamineArticle = template.ExamineArticle;
+				MessageArticle = template.MessageArticle;
+				Faction = FactionMgr.GetFactionByID(template.FactionId);
+				Race = (short) template.Race;
+				BodyType = template.BodyType;
+				MaxSpeedBase = template.MaxSpeed;
+				Flags = (eFlags) template.Flags;
+				MeleeDamageType = template.MeleeDamageType;
+				Gender = template.Gender switch
+				{
+					1 => eGender.Male,
+					2 => eGender.Female,
+					_ => eGender.Neutral,
+				};
 
-                    string equipid = "";
+				if (!string.IsNullOrEmpty(template.Model))
+					_templateModels = Util.SplitCSV(template.Model, true);
+				else
+					_templateModels = null;
 
-                    if (m_templatedInventory.Count > 0)
-                    {
-                        if (m_templatedInventory.Count == 1)
-                            equipid = template.Inventory;
-                        else
-                            equipid = m_templatedInventory[Util.Random(m_templatedInventory.Count - 1)];
-                    }
-                    if (equip.LoadFromDatabase(equipid))
-                        equipHasItems = true;
-                }
+				if (!string.IsNullOrEmpty(template.Size))
+					_templateSizes = Util.SplitCSV(template.Size, true);
+				else
+					_templateSizes = null;
 
-                #region Legacy Equipment Code
+				if (!string.IsNullOrEmpty(template.Inventory))
+					_templateEquipmentIds = Util.SplitCSV(template.Inventory);
+				else
+					_templateEquipmentIds = null;
+			}
 
-                //Nope, nothing in the npcequipment table, lets do the crappy parsing
-                //This is legacy code
-                if (!equipHasItems && template.Inventory.Contains(":"))
-                {
-                    //Temp list to store our models
-                    List<int> tempModels = new List<int>();
+			void HandleBrain()
+			{
+				if (m_ownBrain != null)
+				{
+					if (m_ownBrain is StandardMobBrain brain)
+					{
+						brain.AggroLevel = template.AggroLevel;
+						brain.AggroRange = template.AggroRange;
+					}
 
-                    //Let's go through all of our ';' seperated slots
-                    foreach (string str in equipIDs)
-                    {
-                        tempModels.Clear();
-                        //Split the equipment into slot and model(s)
-                        string[] slotXModels = str.Split(':');
-                        //It should only be two in length SLOT : MODELS
-                        if (slotXModels.Length == 2)
-                        {
-                            int slot;
-                            //Let's try to get our slot
-                            if (Int32.TryParse(slotXModels[0], out slot))
-                            {
-                                //Now lets go through and add all the models to the list
-                                string[] models = slotXModels[1].Split('|');
-                                foreach (string strModel in models)
-                                {
-                                    //We'll add it to the list if we successfully parse it!
-                                    int model;
-                                    if (Int32.TryParse(strModel, out model))
-                                        tempModels.Add(model);
-                                }
+					return;
+				}
 
-                                //If we found some models let's randomly pick one and add it the equipment
-                                if (tempModels.Count > 0)
-                                    equipHasItems |= equip.AddNPCEquipment((eInventorySlot)slot, tempModels[Util.Random(tempModels.Count - 1)]);
-                            }
-                        }
-                    }
-                }
+				m_ownBrain = new StandardMobBrain()
+				{
+					AggroLevel = template.AggroLevel,
+					AggroRange = template.AggroRange
+				};
+			}
 
-                #endregion Legacy Equipment Code
+			void HandleModel()
+			{
+				if (_templateModels != null && _templateModels.Count > 0 && ushort.TryParse(_templateModels[Util.Random(0, _templateModels.Count - 1)], out ushort model))
+					Model = model;
+			}
 
-                //We added some items - let's make it the new inventory
-                if (equipHasItems)
-                {
-                    this.Inventory = new GameNPCInventory(equip);
-                    if (this.Inventory.GetItem(eInventorySlot.DistanceWeapon) != null)
-                        this.SwitchWeapon(eActiveWeaponSlot.Distance);
-                    else
-                    {
-                        DbInventoryItem twohand = Inventory.GetItem(eInventorySlot.TwoHandWeapon);
-                        DbInventoryItem onehand = Inventory.GetItem(eInventorySlot.RightHandWeapon);
+			void HandleSize()
+			{
+				if (_templateSizes != null && _templateSizes.Count > 0 && byte.TryParse(_templateSizes[Util.Random(0, _templateSizes.Count - 1)], out byte size))
+					Size = size;
+				else
+					Size = 50;
+			}
 
-                        if (twohand != null && onehand != null)
-                            //Let's add some random chance
-                            SwitchWeapon(Util.Chance(50) ? eActiveWeaponSlot.TwoHanded : eActiveWeaponSlot.Standard);
-                        else if (twohand != null)
-                            //Hmm our right hand weapon may have been null
-                            SwitchWeapon(eActiveWeaponSlot.TwoHanded);
-                        else if (onehand != null)
-                            //Hmm twohand was null lets default down here
-                            SwitchWeapon(eActiveWeaponSlot.Standard);
-                    }
-                }
+			void HandleInventory()
+			{
+				if (_templateEquipmentIds == null || _templateEquipmentIds.Count <= 0)
+					return;
 
-                if (template.VisibleActiveWeaponSlot > 0)
-                    this.VisibleActiveWeaponSlots = template.VisibleActiveWeaponSlot;
-            }
+				GameNpcInventoryTemplate inventoryTemplate = new();
+				bool foundEquipment = false;
+				List<string> templatedInventory = [];
 
-            #endregion Inventory
+				// Try to load from the npcequipment table.
+				if (!template.Inventory.Contains(':'))
+				{
+					foreach (string str in _templateEquipmentIds)
+						templatedInventory.Add(str);
 
-            BuffBonusCategory4[(int)eStat.STR] += template.Strength;
-            BuffBonusCategory4[(int)eStat.DEX] += template.Dexterity;
-            BuffBonusCategory4[(int)eStat.CON] += template.Constitution;
-            BuffBonusCategory4[(int)eStat.QUI] += template.Quickness;
-            BuffBonusCategory4[(int)eStat.INT] += template.Intelligence;
-            BuffBonusCategory4[(int)eStat.PIE] += template.Piety;
-            BuffBonusCategory4[(int)eStat.EMP] += template.Empathy;
-            BuffBonusCategory4[(int)eStat.CHR] += template.Charisma;
+					string equipmentId = templatedInventory[Util.Random(templatedInventory.Count - 1)];
 
-            m_ownBrain = new StandardMobBrain
-            {
-                Body = this,
-                AggroLevel = template.AggroLevel,
-                AggroRange = template.AggroRange
-            };
-        }
+					if (inventoryTemplate.LoadFromDatabase(equipmentId))
+						foundEquipment = true;
+				}
 
-        public void UpdateNPCEquipmentAppearance()
-        {
-            if (ObjectState != eObjectState.Active) return;
-            foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
-                player.Out.SendLivingEquipmentUpdate(this);
-        }
+				// If that failed, parse it the old way (legacy entry).
+				if (!foundEquipment && template.Inventory.Contains(':'))
+				{
+					List<int> tempModels = [];
+
+					foreach (string str in _templateEquipmentIds)
+					{
+						tempModels.Clear();
+						string[] slotXModels = str.Split(':');
+
+						if (slotXModels.Length == 2)
+						{
+							if (int.TryParse(slotXModels[0], out int slot))
+							{
+								foreach (string strModel in slotXModels[1].Split('|').ToList())
+								{
+									if (ushort.TryParse(strModel, out ushort model))
+										tempModels.Add(model);
+								}
+
+								if (tempModels.Count > 0)
+									foundEquipment |= inventoryTemplate.AddNPCEquipment((eInventorySlot) slot, tempModels[Util.Random(tempModels.Count - 1)]);
+							}
+						}
+					}
+				}
+
+				if (foundEquipment)
+				{
+					Inventory = new GameNPCInventory(inventoryTemplate);
+					InitializeActiveWeaponFromInventory();
+				}
+			}
+		}
+
+		public void UpdateNPCEquipmentAppearance()
+		{
+			if (ObjectState != eObjectState.Active) return;
+			foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
+				player.Out.SendLivingEquipmentUpdate(this);
+		}
 
         /// <summary>
         /// Switches the active weapon to another one
@@ -1983,9 +1964,9 @@ namespace DOL.GS
 
         #region Add/Remove/Create/Remove/Update
 
-        public override void OnUpdateByPlayerService()
-        {
-            m_lastVisibleToPlayerTick = GameLoop.GameLoopTime;
+		public override void OnUpdateOrCreateForPlayer()
+		{
+			m_lastVisibleToPlayerTick = GameLoop.GameLoopTime;
 
             if (Brain != null && !Brain.EntityManagerId.IsSet)
                 Brain.Start();
@@ -2003,28 +1984,11 @@ namespace DOL.GS
             if (MAX_PASSENGERS > 0)
                 Riders = new GamePlayer[MAX_PASSENGERS];
 
-            bool anyPlayer = false;
-
-            foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
-            {
-                if (player == null)
-                    continue;
-
-                player.Out.SendNPCCreate(this);
-
-                if (m_inventory != null)
-                    player.Out.SendLivingEquipmentUpdate(this);
-
-                anyPlayer = true;
-            }
-
-            if (anyPlayer)
-                m_lastVisibleToPlayerTick = GameLoop.GameLoopTime;
-
-            m_spawnPoint.X = X;
-            m_spawnPoint.Y = Y;
-            m_spawnPoint.Z = Z;
-            m_spawnHeading = Heading;
+			ClientService.CreateNpcForPlayers(this);
+			m_spawnPoint.X = X;
+			m_spawnPoint.Y = Y;
+			m_spawnPoint.Z = Z;
+			m_spawnHeading = Heading;
 
 			if (Brain != null)
 			{
@@ -2143,10 +2107,10 @@ namespace DOL.GS
                 if (InCombat)
                     return false;
 
-                // Only move pet if it's following the owner.
-                if (Brain is ControlledNpcBrain controlledBrain && controlledBrain.WalkState != eWalkState.Follow)
-                    return false;
-            }
+				// Only move pet if it's following the owner.
+				if (Brain is ControlledMobBrain controlledBrain && controlledBrain.WalkState != eWalkState.Follow)
+					return false;
+			}
 
             Region rgn = WorldMgr.GetRegion(regionID);
 
@@ -2166,48 +2130,24 @@ namespace DOL.GS
             foreach (GamePlayer player in playersInRadius)
                 player.Out.SendObjectRemove(this);
 
-            // New position.
-            foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
-            {
-                if (player == null)
-                    continue;
+			// New position.
+			ClientService.CreateNpcForPlayers(this);
+			return true;
+		}
 
-                player.Out.SendNPCCreate(this);
-
-                if (m_inventory != null)
-                    player.Out.SendLivingEquipmentUpdate(this);
-            }
-
-            return true;
-        }
-
-        /// <summary>
-        /// Gets or Sets the current Region of the Object
-        /// </summary>
-        public override Region CurrentRegion
-        {
-            get => base.CurrentRegion;
-            set
-            {
-                Region oldRegion = CurrentRegion;
-                base.CurrentRegion = value;
-                Region newRegion = CurrentRegion;
-            }
-        }
-
-        /// <summary>
-        /// Marks this object as deleted!
-        /// </summary>
-        public override void Delete()
-        {
-            lock (m_respawnTimerLock)
-            {
-                if (m_respawnTimer != null)
-                {
-                    m_respawnTimer.Stop();
-                    m_respawnTimer = null;
-                }
-            }
+		/// <summary>
+		/// Marks this object as deleted!
+		/// </summary>
+		public override void Delete()
+		{
+			lock (m_respawnTimerLock)
+			{
+				if (m_respawnTimer != null)
+				{
+					m_respawnTimer.Stop();
+					m_respawnTimer = null;
+				}
+			}
 
             Brain.Stop();
             StopFollowing();
@@ -2267,24 +2207,26 @@ namespace DOL.GS
             return oldBrain;
         }
 
-        /// <summary>
-        /// Adds a temporary brain to Npc, last added brain is active
-        /// </summary>
-        /// <param name="newBrain"></param>
-        public virtual void AddBrain(ABrain newBrain)
-        {
-            if (newBrain == null)
-                throw new ArgumentNullException("newBrain");
-            if (newBrain.IsActive)
-                throw new ArgumentException("The new brain is already active.", "newBrain");
+		/// <summary>
+		/// Adds a temporary brain to Npc, last added brain is active
+		/// </summary>
+		/// <param name="newBrain"></param>
+		public virtual void AddBrain(ABrain newBrain)
+		{
+			ArgumentNullException.ThrowIfNull(newBrain);
 
-            Brain.Stop();
-            ArrayList brains = new ArrayList(m_brains);
-            brains.Add(newBrain);
-            m_brains = brains; // make new array list to avoid locks in the Brain property
-            newBrain.Body = this;
-            newBrain.Start();
-        }
+			if (newBrain.IsActive)
+				throw new ArgumentException("The new brain is already active.", nameof(newBrain));
+
+			Brain.Stop();
+			ArrayList brains = new(m_brains)
+			{
+				newBrain
+			};
+			m_brains = brains;
+			newBrain.Body = this;
+			newBrain.Start();
+		}
 
         /// <summary>
         /// Removes a temporary brain from Npc
@@ -2321,65 +2263,84 @@ namespace DOL.GS
 
         #region GetAggroLevelString
 
-        /// <summary>
-        /// How friendly this NPC is to player
-        /// </summary>
-        /// <param name="player">GamePlayer that is examining this object</param>
-        /// <param name="firstLetterUppercase"></param>
-        /// <returns>aggro state as string</returns>
-        public virtual string GetAggroLevelString(GamePlayer player, bool firstLetterUppercase)
-        {
-            // "aggressive", "hostile", "neutral", "friendly"
-            // TODO: correct aggro strings
-            // TODO: some merchants can be aggressive to players even in same realm
-            // TODO: findout if trainers can be aggro at all
+		/// <summary>
+		/// How friendly this NPC is to player
+		/// </summary>
+		/// <param name="player">GamePlayer that is examining this object</param>
+		/// <param name="firstLetterUppercase"></param>
+		/// <returns>aggro state as string</returns>
+		public virtual string GetAggroLevelString(GamePlayer player, bool firstLetterUppercase)
+		{
+			string aggroLevelString;
+			IOldAggressiveBrain aggroBrain = Brain as IOldAggressiveBrain;
 
-            //int aggro = CalculateAggroLevelToTarget(player);
+			if (Faction != null && aggroBrain != null && aggroBrain.AggroLevel > 0 && aggroBrain.AggroRange > 0)
+			{
+				if (GameServer.ServerRules.IsSameRealm(this, player, true))
+				{
+					if (firstLetterUppercase)
+						aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Friendly2");
+					else
+						aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Friendly1");
+				}
+				else
+				{
+					string translationString = string.Empty;
 
-            // "aggressive towards you!", "hostile towards you.", "neutral towards you.", "friendly."
-            // TODO: correct aggro strings
-            string aggroLevelString = "";
-            int aggroLevel;
-            IOldAggressiveBrain aggroBrain = Brain as IOldAggressiveBrain;
-            //Calculate Faction aggro - base AggroLevel needs to be greater tha 0 for Faction aggro calc to work.
-            if (Faction != null && aggroBrain != null && aggroBrain.AggroLevel > 0 && aggroBrain.AggroRange > 0)
-            {
-                aggroLevel = Faction.GetAggroToFaction(player);
+					switch (Faction.GetStandingToFaction(player))
+					{
+						case Faction.Standing.AGGRESIVE:
+						{
+							translationString = "GameNPC.GetAggroLevelString.Aggressive1";
+							break;
+						}
+						case Faction.Standing.HOSTILE:
+						{
+							translationString = "GameNPC.GetAggroLevelString.Hostile1";
+							break;
+						}
+						case Faction.Standing.NEUTRAL:
+						{
+							translationString = "GameNPC.GetAggroLevelString.Neutral1";
+							break;
+						}
+						case Faction.Standing.FRIENDLY:
+						{
+							translationString = "GameNPC.GetAggroLevelString.Friendly1";
+							break;
+						}
+					}
 
-                if (GameServer.ServerRules.IsSameRealm(this, player, true))
-                {
-                    if (firstLetterUppercase) aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Friendly2");
-                    else aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Friendly1");
-                }
-                else if (aggroLevel > 75)
-                    aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Aggressive1");
-                else if (aggroLevel > 50)
-                    aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Hostile1");
-                else if (aggroLevel > 25)
-                    aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Neutral1");
-                else
-                    aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Friendly1");
-            }
-            else
-            {
-                if (GameServer.ServerRules.IsSameRealm(this, player, true))
-                {
-                    if (firstLetterUppercase) aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Friendly2");
-                    else aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Friendly1");
-                }
-                else if (aggroBrain != null && aggroBrain.AggroLevel > 0)
-                {
-                    if (firstLetterUppercase) aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Aggressive2");
-                    else aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Aggressive1");
-                }
-                else
-                {
-                    if (firstLetterUppercase) aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Neutral2");
-                    else aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Neutral1");
-                }
-            }
-            return LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.TowardsYou", aggroLevelString);
-        }
+					aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, translationString);
+				}
+			}
+			else
+			{
+				if (GameServer.ServerRules.IsSameRealm(this, player, true))
+				{
+					if (firstLetterUppercase)
+						aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Friendly2");
+					else
+						aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Friendly1");
+				}
+				else if (aggroBrain != null && aggroBrain.AggroLevel > 0)
+				{
+					if (firstLetterUppercase)
+						aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Aggressive2");
+					else
+						aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Aggressive1");
+				}
+				else
+				{
+					if (firstLetterUppercase)
+						aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Neutral2");
+					else
+						aggroLevelString = LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.Neutral1");
+				}
+			}
+
+			return LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.GetAggroLevelString.TowardsYou", aggroLevelString);
+		}
 
         public string GetPronoun(int form, bool capitalize, string lang)
         {
@@ -2598,42 +2559,47 @@ namespace DOL.GS
         /// </summary>
         public IList<DbMobXAmbientBehavior> ambientTexts;
 
-        /// <summary>
-        /// This function is called from the ObjectInteractRequestHandler
-        /// </summary>
-        /// <param name="player">GamePlayer that interacts with this object</param>
-        /// <returns>false if interaction is prevented</returns>
-        public override bool Interact(GamePlayer player)
-        {
-            if (!base.Interact(player)) return false;
-            //if (!GameServer.ServerRules.IsSameRealm(this, player, true) && Faction.GetAggroToFaction(player) > 25)
-            if (!GameServer.ServerRules.IsSameRealm(this, player, true) && Faction != null && Faction.GetAggroToFaction(player) > 50)
-            {
-                player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.Interact.DirtyLook",
-                    GetName(0, true, player.Client.Account.Language, this)), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+		/// <summary>
+		/// This function is called from the ObjectInteractRequestHandler
+		/// </summary>
+		/// <param name="player">GamePlayer that interacts with this object</param>
+		/// <returns>false if interaction is prevented</returns>
+		public override bool Interact(GamePlayer player)
+		{
+			if (!base.Interact(player))
+				return false;
 
-                Notify(GameObjectEvent.InteractFailed, this, new InteractEventArgs(player));
-                return false;
-            }
-            if (MAX_PASSENGERS > 1)
-            {
-                string name = "";
-                if (this is GameTaxiBoat)
-                    name = "boat";
-                if (this is GameSiegeRam)
-                    name = "ram";
+			if (!GameServer.ServerRules.IsSameRealm(this, player, true) && Faction != null && Faction.GetStandingToFaction(player) >= Faction.Standing.HOSTILE)
+			{
+				player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.Interact.DirtyLook",
+					GetName(0, true, player.Client.Account.Language, this)), eChatType.CT_System, eChatLoc.CL_SystemWindow);
 
-                if (this is GameSiegeRam && player.Realm != this.Realm)
-                {
-                    player.Out.SendMessage($"This siege equipment is owned by an enemy realm!", eChatType.CT_System, eChatLoc.CL_SystemWindow);
-                    return false;
-                }
+				Notify(GameObjectEvent.InteractFailed, this, new InteractEventArgs(player));
+				return false;
+			}
 
-                if (RiderSlot(player) != -1)
-                {
-                    player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.Interact.AlreadyRiding", name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
-                    return false;
-                }
+			if (MAX_PASSENGERS > 1)
+			{
+				string name;
+
+				if (this is GameTaxiBoat)
+					name = "boat";
+				else if (this is GameSiegeRam)
+					name = "ram";
+				else
+					name = string.Empty;
+
+				if (this is GameSiegeRam && player.Realm != Realm)
+				{
+					player.Out.SendMessage($"This siege equipment is owned by an enemy realm!", eChatType.CT_System, eChatLoc.CL_SystemWindow);
+					return false;
+				}
+
+				if (RiderSlot(player) != -1)
+				{
+					player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.Interact.AlreadyRiding", name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+					return false;
+				}
 
                 if (GetFreeArrayLocation() == -1)
                 {
@@ -2641,22 +2607,18 @@ namespace DOL.GS
                     return false;
                 }
 
-                if (player.IsRiding)
-                {
-                    player.DismountSteed(true);
-                }
+				if (player.IsRiding)
+					player.DismountSteed(true);
 
-                if (player.IsOnHorse)
-                {
-                    player.IsOnHorse = false;
-                }
+				if (player.IsOnHorse)
+					player.IsOnHorse = false;
 
-                player.MountSteed(this, true);
-            }
+				player.MountSteed(this, true);
+			}
 
-            FireAmbientSentence(eAmbientTrigger.interact, player);
-            return true;
-        }
+			FireAmbientSentence(eAmbientTrigger.interact, player);
+			return true;
+		}
 
         /// <summary>
         /// ToDo
@@ -2772,31 +2734,23 @@ namespace DOL.GS
             attackComponent.StopAttack();
         }
 
-        /// <summary>
-        /// Starts a melee attack on a target
-        /// </summary>
-        /// <param name="target">The object to attack</param>
-        public virtual void StartAttack(GameObject target)
-        {
-            attackComponent.RequestStartAttack(target);
+		/// <summary>
+		/// Starts a melee attack on a target
+		/// </summary>
+		/// <param name="target">The object to attack</param>
+		public virtual void StartAttack(GameObject target)
+		{
+			attackComponent.RequestStartAttack(target);
+		}
 
-            if (FollowTarget != target)
-            {
-                StopFollowing();
-                Follow(target as GameLiving, movementComponent.FollowMinDistance, movementComponent.FollowMaxDistance);
-            }
-
-            FireAmbientSentence(eAmbientTrigger.fighting, target);
-        }
-
-        private int scalingFactor = Properties.GAMENPC_SCALING;
-        private int orbsReward = 0;
-
-        public override double GetWeaponSkill(DbInventoryItem weapon)
-        {
-            double weaponSkill = (Level + 1) * (ScalingFactor / 7.5) * (1 + 0.01 * GetWeaponStat(weapon) / 2);
-            return Math.Max(0, weaponSkill * GetModified(eProperty.WeaponSkill) * 0.01);
-        }
+		private double weaponSkillScalingFactor = 15;
+		private int orbsReward = 0;
+		
+		public override double GetWeaponSkill(DbInventoryItem weapon)
+		{
+			double weaponSkill = Math.Max(1, (int) Level) * (WeaponSkillScalingFactor / 5.75) * (1 + 0.01 * (GetWeaponStat(weapon) + 30) / 2);
+			return Math.Max(1, weaponSkill * GetModified(eProperty.WeaponSkill) * 0.01);
+		}
 
         public void SetLastMeleeAttackTick()
         {
@@ -2969,14 +2923,14 @@ namespace DOL.GS
                                 if (playerXpGainer != null && playerXpGainer.IsObjectGreyCon(this))
                                     continue;
 
-                                if (playerXpGainer != null &&
-                                    playerXpGainer.ObjectState == eObjectState.Active &&
-                                    playerXpGainer.IsAlive &&
-                                    playerXpGainer.IsWithinRadius(this, WorldMgr.MAX_EXPFORKILL_DISTANCE))
-                                    Faction.KillMember(playerXpGainer);
-                            }
-                        }
-                    }
+								if (playerXpGainer != null &&
+									playerXpGainer.ObjectState == eObjectState.Active &&
+									playerXpGainer.IsAlive &&
+									playerXpGainer.IsWithinRadius(this, WorldMgr.MAX_EXPFORKILL_DISTANCE))
+									Faction.OnMemberKilled(playerXpGainer);
+							}
+						}
+					}
 
                     // Deal out exp and realm points based on server rules.
                     Diagnostics.StartPerfCounter($"ReaperService-NPC-ProcessDeath-OnNPCKIlled-NPC({hashCode})");
@@ -3102,30 +3056,27 @@ namespace DOL.GS
             set => CanUseLefthandedWeapon = value;
         }
 
-        /// <summary>
-        /// Method to switch the npc to Melee attacks
-        /// </summary>
-        /// <param name="target"></param>
-        public void SwitchToMelee(GameObject target)
-        {
-            // Tolakram: Order is important here.  First StopAttack, then switch weapon
-            StopFollowing();
-            attackComponent.StopAttack();
+		/// <summary>
+		/// Method to switch the npc to Melee attacks
+		/// </summary>
+		/// <param name="target"></param>
+		public void SwitchToMelee(GameObject target)
+		{
+			attackComponent.StopAttack();
+			DbInventoryItem twohand = Inventory.GetItem(eInventorySlot.TwoHandWeapon);
+			DbInventoryItem righthand = Inventory.GetItem(eInventorySlot.RightHandWeapon);
 
-            DbInventoryItem twohand = Inventory.GetItem(eInventorySlot.TwoHandWeapon);
-            DbInventoryItem righthand = Inventory.GetItem(eInventorySlot.RightHandWeapon);
-
-            if (twohand != null && righthand == null)
-                SwitchWeapon(eActiveWeaponSlot.TwoHanded);
-            else if (twohand != null && righthand != null)
-            {
-                if (Util.Chance(50))
-                    SwitchWeapon(eActiveWeaponSlot.TwoHanded);
-                else
-                    SwitchWeapon(eActiveWeaponSlot.Standard);
-            }
-            else
-                SwitchWeapon(eActiveWeaponSlot.Standard);
+			if (twohand != null && righthand == null)
+				SwitchWeapon(eActiveWeaponSlot.TwoHanded);
+			else if (twohand != null && righthand != null)
+			{
+				if (Util.Chance(50))
+					SwitchWeapon(eActiveWeaponSlot.TwoHanded);
+				else
+					SwitchWeapon(eActiveWeaponSlot.Standard);
+			}
+			else
+				SwitchWeapon(eActiveWeaponSlot.Standard);
 
             attackComponent.RequestStartAttack(target);
         }
@@ -3264,30 +3215,20 @@ namespace DOL.GS
                 m_healthRegenerationTimer = null;
             }
 
-			int respawnInt = RespawnInterval;
-			int minBound = (int) Math.Floor(respawnInt * .95);
-			int maxBound = (int) Math.Floor(respawnInt * 1.05);
-			respawnInt = Util.Random(minBound, maxBound);
-			if (respawnInt > 0)
-			{
-				lock (m_respawnTimerLock)
-				{
-					if (m_respawnTimer == null)
-					{
-						m_respawnTimer = new ECSGameTimer(this);
-						m_respawnTimer.Callback = new ECSGameTimer.ECSTimerCallback(RespawnTimerCallback);
-					}
-					else if (m_respawnTimer.IsAlive)
-					{
-						m_respawnTimer.Stop();
-					}
-					// register Mob as "respawning"
-					CurrentRegion.MobsRespawning.TryAdd(this, respawnInt);
+			if (RespawnInterval <= 0)
+				return;
 
-                    m_respawnTimer.Start(respawnInt);
-                }
-            }
-        }
+			lock (m_respawnTimerLock)
+			{
+				if (m_respawnTimer == null)
+				{
+					m_respawnTimer = new ECSGameTimer(this);
+					m_respawnTimer.Callback = new ECSGameTimer.ECSTimerCallback(RespawnTimerCallback);
+				}
+
+				m_respawnTimer.Start(RespawnInterval);
+			}
+		}
 
 		/// <summary>
 		/// The callback that will respawn this mob
@@ -3296,44 +3237,28 @@ namespace DOL.GS
 		/// <returns>the new interval</returns>
 		protected virtual int RespawnTimerCallback(ECSGameTimer respawnTimer)
 		{
-			CurrentRegion.MobsRespawning.TryRemove(this, out _);
-
-            lock (m_respawnTimerLock)
-            {
-                if (m_respawnTimer != null)
-                {
-                    m_respawnTimer.Stop();
-                    m_respawnTimer = null;
-                }
-            }
+			lock (m_respawnTimerLock)
+			{
+				if (m_respawnTimer != null)
+				{
+					m_respawnTimer.Stop();
+					m_respawnTimer = null;
+				}
+			}
 
             if (IsAlive || ObjectState == eObjectState.Active)
                 return 0;
 
-            /*
-			if (m_level >= 5 && m_databaseLevel < 60)
-			{
-				int minBound = (int) Math.Round(m_databaseLevel * .9);
-				int maxBound = (int) Math.Round(m_databaseLevel * 1.1);
-				this.Level = (byte)  Util.Random(minBound, maxBound);
-			}*/
-
-            SpawnTick = GameLoop.GameLoopTime;
-
-            // Heal this NPC and move it to the spawn location.
-            Health = MaxHealth;
-            Mana = MaxMana;
-            Endurance = MaxEndurance;
-
-			int origSpawnX = m_spawnPoint.X;
-			int origSpawnY = m_spawnPoint.Y;
-			X = m_spawnPoint.X;
-			Y = m_spawnPoint.Y;
-			Z = m_spawnPoint.Z;
-			Heading = m_spawnHeading;
+			LoadTemplate(NPCTemplate);
+			Health = MaxHealth;
+			Mana = MaxMana;
+			Endurance = MaxEndurance;
+			m_x = m_spawnPoint.X;
+			m_y = m_spawnPoint.Y;
+			m_z = m_spawnPoint.Z;
+			_heading = m_spawnHeading;
+			SpawnTick = GameLoop.GameLoopTime;
 			AddToWorld();
-			m_spawnPoint.X = origSpawnX;
-			m_spawnPoint.Y = origSpawnY;
 			return 0;
 		}
 
@@ -3461,13 +3386,10 @@ namespace DOL.GS
                 {
                     DbInventoryItem invitem;
 
-                    if (lootTemplate is DbItemUnique)
-                    {
-                        GameServer.Database.AddObject(lootTemplate);
-                        invitem = GameInventoryItem.Create(lootTemplate as DbItemUnique);
-                    }
-                    else
-                        invitem = GameInventoryItem.Create(lootTemplate);
+					if (lootTemplate is DbItemUnique)
+						invitem = GameInventoryItem.Create(lootTemplate as DbItemUnique);
+					else
+						invitem = GameInventoryItem.Create(lootTemplate);
 
                     if (lootTemplate is GeneratedUniqueItem)
                     {
@@ -3942,17 +3864,13 @@ namespace DOL.GS
             if (LosChecker == null && Brain is IControlledBrain controlledBrain)
                 LosChecker = controlledBrain.GetPlayerOwner();
 
-            if (LosChecker == null && Brain is StandardMobBrain brain)
-            {
-                foreach (GamePlayer playerInRange in GetPlayersInRadius((ushort)brain.AggroRange))
-                {
-                    if (playerInRange != null)
-                    {
-                        LosChecker = playerInRange;
-                        break;
-                    }
-                }
-            }
+			if (LosChecker == null && Brain is StandardMobBrain brain)
+			{
+				List<GamePlayer> playersInRadius = GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE);
+
+				if (playersInRadius.Count > 0)
+					LosChecker = playersInRadius[Util.Random(playersInRadius.Count - 1)];
+			}
 
 			if (LosChecker == null)
 				return base.CastSpell(spellToCast, line, spellCastingAbilityHandler);
@@ -4465,17 +4383,18 @@ namespace DOL.GS
 		/// </summary>
 		public virtual bool IsAggressive => Brain is IOldAggressiveBrain;
 
-        /// <summary>
-        /// Whether this NPC is a friend or not.
-        /// </summary>
-        /// <param name="npc">The NPC that is checked against.</param>
-        /// <returns></returns>
-        public virtual bool IsFriend(GameNPC npc)
-        {
-            if (Faction == null || npc.Faction == null)
-                return false;
-            return (npc.Faction == Faction || Faction.FriendFactions.Contains(npc.Faction));
-        }
+		/// <summary>
+		/// Whether this NPC is a friend or not.
+		/// </summary>
+		/// <param name="npc">The NPC that is checked against.</param>
+		/// <returns></returns>
+		public virtual bool IsFriend(GameNPC npc)
+		{
+			if (Faction == null || npc.Faction == null)
+				return false;
+
+			return Faction.FriendFactions.Contains(npc.Faction);
+		}
 
         /// <summary>
         /// Broadcast loot to the raid.
@@ -4668,8 +4587,9 @@ namespace DOL.GS
 
         private double m_campBonus = 1;
 
-        public virtual double CampBonus { get => m_campBonus; set => m_campBonus = value; }
-        public int ScalingFactor { get => scalingFactor; set => scalingFactor = value; }
-        public int OrbsReward { get => orbsReward; set => orbsReward = value; }
-    }
+		public virtual double CampBonus { get => m_campBonus; set => m_campBonus = value; }
+		public virtual double MaxHealthScalingFactor => 1.0;
+		public double WeaponSkillScalingFactor { get => weaponSkillScalingFactor; set => weaponSkillScalingFactor = value; }
+		public int OrbsReward { get => orbsReward; set => orbsReward = value; }
+	}
 }

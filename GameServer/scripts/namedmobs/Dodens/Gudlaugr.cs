@@ -28,11 +28,10 @@ namespace DOL.GS.Scripts
 			Empathy = npcTemplate.Empathy;
 
 			Faction = FactionMgr.GetFactionByID(779);
-			Faction.AddFriendFaction(FactionMgr.GetFactionByID(187));
 			RespawnInterval = ServerProperties.Properties.SET_EPIC_GAME_ENCOUNTER_RESPAWNINTERVAL * 60000;//1min is 60000 miliseconds
 
 			BodyType = 1;
-			ScalingFactor = 40;
+			WeaponSkillScalingFactor = 40;
 			GudlaugrBrain sbrain = new GudlaugrBrain();
 			SetOwnBrain(sbrain);
 			base.AddToWorld();
@@ -44,15 +43,7 @@ namespace DOL.GS.Scripts
 		{
 			return base.AttackDamage(weapon) * Strength / 100;
 		}
-		public override int AttackRange
-		{
-			get
-			{
-				return 350;
-			}
-			set
-			{ }
-		}
+		public override int MeleeAttackRange => 350;
 		public override bool HasAbility(string keyName)
 		{
 			if (IsAlive && keyName == GS.Abilities.CCImmunity)
@@ -88,7 +79,7 @@ namespace DOL.GS.Scripts
 			GudlaugrBrain brain = new GudlaugrBrain();
 			if (TargetObject != null)
 			{
-				if (ad.Target.IsWithinRadius(this, AttackRange))
+				if (ad.Target.IsWithinRadius(this, attackComponent.AttackRange))
 				{
 					if (!ad.Target.effectListComponent.ContainsEffectForEffectType(eEffect.Bleed))
 					{
@@ -154,7 +145,7 @@ namespace DOL.GS.Scripts
 				if (!rage)
 				{
 					// transmorph to little white wolf
-					Body.ScalingFactor = 40;
+					Body.WeaponSkillScalingFactor = 40;
 					Body.Model = 650;
 					Body.Size = 40;
 					Body.Strength = Body.NPCTemplate.Strength;
@@ -162,7 +153,7 @@ namespace DOL.GS.Scripts
 				else
 				{
 					// transmorph to demon wolf
-					Body.ScalingFactor = 60;
+					Body.WeaponSkillScalingFactor = 60;
 					Body.Strength = 330;
 					Body.Model = 649;
 					Body.Size = 110;

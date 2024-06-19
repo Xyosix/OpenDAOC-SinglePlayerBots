@@ -22,6 +22,29 @@ namespace DOL.AI.Brain
         public override void Exit() { }
     }
 
+    public class StandardMobState_WAKING_UP : StandardMobState
+    {
+        public StandardMobState_WAKING_UP(StandardMobBrain brain) : base(brain)
+        {
+            StateType = eFSMStateType.WAKING_UP;
+        }
+
+        public override void Enter()
+        {
+            if (ECS.Debug.Diagnostics.StateMachineDebugEnabled)
+                Console.WriteLine($"{_brain.Body} is entering WAKING_UP");
+
+            _brain.Body?.StopMoving();
+            base.Enter();
+        }
+
+        public override void Think()
+        {
+            _brain.FSM.SetCurrentState(eFSMStateType.IDLE);
+            _brain.Think();
+        }
+    }
+
     public class StandardMobState_IDLE : StandardMobState
     {
         public StandardMobState_IDLE(StandardMobBrain brain) : base(brain)
@@ -34,14 +57,30 @@ namespace DOL.AI.Brain
             if (ECS.Debug.Diagnostics.StateMachineDebugEnabled)
                 Console.WriteLine($"{_brain.Body} is entering IDLE");
 
+            _brain.Body.StopMoving();
             base.Enter();
         }
 
         public override void Think()
         {
+            if (_brain.CheckSpells(StandardMobBrain.eCheckSpellType.Defensive))
+                return;
+
             if (_brain.HasPatrolPath())
             {
                 _brain.FSM.SetCurrentState(eFSMStateType.PATROLLING);
+                return;
+            }
+
+            if (!_brain.Body.IsNearSpawn)
+            {
+                _brain.FSM.SetCurrentState(eFSMStateType.RETURN_TO_SPAWN);
+                return;
+            }
+
+            if (_brain.CheckProximityAggro())
+            {
+                _brain.FSM.SetCurrentState(eFSMStateType.AGGRO);
                 return;
             }
 
@@ -51,45 +90,6 @@ namespace DOL.AI.Brain
                 return;
             }
 
-            if (_brain.CheckProximityAggro())
-            {
-                _brain.FSM.SetCurrentState(eFSMStateType.AGGRO);
-                return;
-            }
-
-            _brain.CheckSpells(StandardMobBrain.eCheckSpellType.Defensive);
-            base.Think();
-        }
-    }
-
-    public class StandardMobState_WAKING_UP : StandardMobState
-    {
-        public StandardMobState_WAKING_UP(StandardMobBrain brain) : base(brain)
-        {
-            StateType = eFSMStateType.WAKING_UP;
-        }
-
-        public override void Think()
-        {
-            if (!_brain.Body.attackComponent.AttackState && _brain.Body.CanRoam)
-            {
-                _brain.FSM.SetCurrentState(eFSMStateType.ROAMING);
-                return;
-            }
-
-            if (_brain.HasPatrolPath())
-            {
-                _brain.FSM.SetCurrentState(eFSMStateType.PATROLLING);
-                return;
-            }
-
-            if (_brain.CheckProximityAggro())
-            {
-                _brain.FSM.SetCurrentState(eFSMStateType.AGGRO);
-                return;
-            }
-
-            _brain.FSM.SetCurrentState(eFSMStateType.IDLE);
             base.Think();
         }
     }
@@ -109,6 +109,9 @@ namespace DOL.AI.Brain
             if (ECS.Debug.Diagnostics.StateMachineDebugEnabled)
                 Console.WriteLine($"{_brain.Body} is entering AGGRO");
 
+            if (_brain.Body.Flags.HasFlag(GameNPC.eFlags.STEALTH))
+                _brain.Body.Flags ^= GameNPC.eFlags.STEALTH;
+
             _aggroEndTime = GameLoop.GameLoopTime + LEAVE_WHEN_OUT_OF_COMBAT_FOR;
             base.Enter();
         }
@@ -124,21 +127,19 @@ namespace DOL.AI.Brain
 
         public override void Think()
         {
-            if (!_brain.HasAggro || (!_brain.Body.InCombatInLast(LEAVE_WHEN_OUT_OF_COMBAT_FOR) && ServiceUtils.ShouldTick(_aggroEndTime)))
+            if (!_brain.HasAggro)
             {
-                if (!_brain.Body.IsMezzed && !_brain.Body.IsStunned)
-                {
-                    if (_brain.Body.CurrentWaypoint != null)
-                        _brain.FSM.SetCurrentState(eFSMStateType.PATROLLING);
-                    else
-                        _brain.FSM.SetCurrentState(eFSMStateType.RETURN_TO_SPAWN);
-                }
-
+                _brain.FSM.SetCurrentState(eFSMStateType.IDLE);
                 return;
             }
 
-            if (_brain.Body.Flags.HasFlag(GameNPC.eFlags.STEALTH))
-                _brain.Body.Flags ^= GameNPC.eFlags.STEALTH;
+            if (_brain.Body.IsCrowdControlled || EffectListService.GetSpellEffectOnTarget(_brain.Body, eEffect.MovementSpeedDebuff)?.SpellHandler.Spell.Value == 99)
+                _aggroEndTime = GameLoop.GameLoopTime + LEAVE_WHEN_OUT_OF_COMBAT_FOR;
+            else if (!_brain.Body.InCombatInLast(LEAVE_WHEN_OUT_OF_COMBAT_FOR) && ServiceUtils.ShouldTick(_aggroEndTime))
+            {
+                _brain.FSM.SetCurrentState(eFSMStateType.IDLE);
+                return;
+            }
 
             _brain.AttackMostWanted();
             base.Think();
@@ -214,28 +215,20 @@ namespace DOL.AI.Brain
                 _brain.Body.Flags |= GameNPC.eFlags.STEALTH;
 
             _brain.ClearAggroList();
-            _brain.Body.ReturnToSpawnPoint(Speed);
             base.Enter();
         }
 
         public override void Think()
         {
-            if (!_brain.Body.IsNearSpawn &&
-                (!_brain.HasAggro || !_brain.Body.IsEngaging) &&
-                (!_brain.Body.IsReturningToSpawnPoint) &&
-                _brain.Body.CurrentSpeed == 0)
+            if (_brain.Body.IsNearSpawn)
             {
-                _brain.FSM.SetCurrentState(eFSMStateType.WAKING_UP);
+                _brain.FSM.SetCurrentState(eFSMStateType.IDLE);
                 _brain.Body.TurnTo(_brain.Body.SpawnHeading);
                 return;
             }
 
-            if (_brain.Body.IsNearSpawn)
-            {
-                _brain.FSM.SetCurrentState(eFSMStateType.WAKING_UP);
-                _brain.Body.TurnTo(_brain.Body.SpawnHeading);
-                return;
-            }
+            if (!_brain.Body.IsReturningToSpawnPoint)
+                _brain.Body.ReturnToSpawnPoint(Speed);
 
             base.Think();
         }
@@ -266,6 +259,7 @@ namespace DOL.AI.Brain
                 return;
             }
 
+            // TODO: NPCs can get stuck here. Find a way to resume patrols.
             base.Think();
         }
     }
@@ -288,7 +282,7 @@ namespace DOL.AI.Brain
 
         public override void Think()
         {
-            _brain.FSM.SetCurrentState(eFSMStateType.WAKING_UP);
+            _brain.FSM.SetCurrentState(eFSMStateType.IDLE);
             base.Think();
         }
     }

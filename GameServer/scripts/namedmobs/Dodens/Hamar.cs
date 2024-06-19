@@ -42,7 +42,7 @@ namespace DOL.GS.Scripts
 			VisibleActiveWeaponSlots = 16;
 			RespawnInterval = ServerProperties.Properties.SET_EPIC_GAME_ENCOUNTER_RESPAWNINTERVAL * 60000;//1min is 60000 miliseconds
 
-			ScalingFactor = 40;
+			WeaponSkillScalingFactor = 40;
 			base.SetOwnBrain(new HamarBrain());
 			LoadedFromScript = false; //load from database
 			SaveIntoDatabase();
@@ -78,15 +78,7 @@ namespace DOL.GS.Scripts
 		{
 			get { return 30000; }
 		}
-		public override int AttackRange
-		{
-			get
-			{
-				return 350;
-			}
-			set
-			{ }
-		}
+		public override int MeleeAttackRange => 350;
 		public override bool HasAbility(string keyName)
 		{
 			if (IsAlive && keyName == GS.Abilities.CCImmunity)

@@ -48,21 +48,11 @@ namespace DOL.GS
         private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
         public override eGameObjectType GameObjectType => eGameObjectType.PLAYER;
-        private readonly object m_LockObject = new object();
-        public int Regen { get; set; }
-        public int Endchant { get; set; }
-        public long LastEnduTick { get; set; }
-        public int RegenRateAtChange { get; set; }
-        public int EnduDebuff { get; set; }
-        public double RegenBuff { get; set; }
-        public double RegenAfterTireless { get; set; }
-        public double NonCombatNonSprintRegen { get; set; }
-        public double CombatRegen { get; set; }
+        private readonly object m_LockObject = new();
         public double SpecLock { get; set; }
         public long LastWorldUpdate { get; set; }
         public ChainedActions ChainedActions { get; }
 
-        public ECSGameTimer EnduRegenTimer { get { return m_enduRegenerationTimer; } }
         public ECSGameTimer PredatorTimeoutTimer
         {
             get
@@ -949,6 +939,12 @@ namespace DOL.GS
 
             GameEventMgr.RemoveAllHandlersForObject(m_inventory);
 
+            if (_linkDeathTimer != null)
+            {
+                _linkDeathTimer.Stop();
+                _linkDeathTimer = null;
+            }
+
             if (CraftTimer != null)
             {
                 CraftTimer.Stop();
@@ -1155,7 +1151,7 @@ namespace DOL.GS
 
             protected override int OnTick(ECSGameTimer timer)
             {
-                if (_playerOwner.ObjectState == eObjectState.Active)
+                if (_playerOwner.ObjectState is eObjectState.Active)
                     PlayerPositionUpdateHandler.BroadcastLastReceivedPacket(_playerOwner.Client);
 
                 if (!ServiceUtils.ShouldTick(_playerOwner.Client.LinkDeathTime + SECONDS_TO_QUIT_ON_LINKDEATH * 1000))
@@ -2560,144 +2556,87 @@ namespace DOL.GS
             m_enduRegenerationTimer.Stop();
         }
 
-        /// <summary>
-        /// Override HealthRegenTimer because if we are not connected anymore
-        /// we DON'T regenerate health, even if we are not garbage collected yet!
-        /// </summary>
-        /// <param name="callingTimer">the timer</param>
-        /// <returns>the new time</returns>
         protected override int HealthRegenerationTimerCallback(ECSGameTimer callingTimer)
         {
-            // I'm not sure what the point of this is.
-            if (Client.ClientState != GameClient.eClientState.Playing)
-                return HealthRegenerationPeriod;
-
-            // adjust timer based on Live testing of player
-
             if (Health < MaxHealth)
-            {
                 ChangeHealth(this, eHealthChangeType.Regenerate, GetModified(eProperty.HealthRegenerationRate));
-            }
 
-            #region PVP DAMAGE
+            bool atMaxHealth = Health >= MaxHealth;
 
             if (DamageRvRMemory > 0)
-                DamageRvRMemory -= (long)Math.Max(GetModified(eProperty.HealthRegenerationRate), 0);
-
-            #endregion PVP DAMAGE
-
-            //If we are fully healed, we stop the timer
-            if (Health >= MaxHealth)
             {
-
-                #region PVP DAMAGE
-
-                // Fully Regenerated, Set DamageRvRMemory to 0
-                if (DamageRvRMemory > 0)
+                if (atMaxHealth)
                     DamageRvRMemory = 0;
+                else
+                    DamageRvRMemory -= Math.Max(GetModified(eProperty.HealthRegenerationRate), 0);
+            }
 
-                #endregion PVP DAMAGE
-
-                //We clean all damagedealers if we are fully healed,
-                //no special XP calculations need to be done
+            if (atMaxHealth)
+            {
                 lock (m_xpGainers.SyncRoot)
                 {
                     m_xpGainers.Clear();
                 }
 
-                callingTimer.Stop();
+                return 0;
             }
 
             if (InCombat)
-            {
-                // in combat each tic is aprox 6 seconds - tolakram
                 return HealthRegenerationPeriod * 2;
-            }
 
             if (IsSitting)
-            {
                 return HealthRegenerationPeriod / 2;
-            }
 
-            //Heal at standard rate
             return HealthRegenerationPeriod;
         }
 
-        public int PowerRegenStackingBonus = 0;
+        public int PowerRegenStackingBonus { get; set; } = 0;
 
-        /// <summary>
-        /// Override PowerRegenTimer because if we are not connected anymore
-        /// we DON'T regenerate mana, even if we are not garbage collected yet!
-        /// </summary>
-        /// <param name="selfRegenerationTimer">the timer</param>
-        /// <returns>the new time</returns>
         protected override int PowerRegenerationTimerCallback(ECSGameTimer selfRegenerationTimer)
         {
-            if (Client.ClientState != GameClient.eClientState.Playing)
-                return PowerRegenerationPeriod;
             if (IsSitting)
             {
-                if(PowerRegenStackingBonus < 3) PowerRegenStackingBonus++;
+                if (PowerRegenStackingBonus < 3)
+                    PowerRegenStackingBonus++;
             }
-            else PowerRegenStackingBonus = 0;
-            int interval = base.PowerRegenerationTimerCallback(selfRegenerationTimer);
-            return interval;
+            else
+                PowerRegenStackingBonus = 0;
+
+            return base.PowerRegenerationTimerCallback(selfRegenerationTimer);
         }
 
-        /// <summary>
-        /// Override EnduranceRegenTimer because if we are not connected anymore
-        /// we DON'T regenerate endurance, even if we are not garbage collected yet!
-        /// </summary>
-        /// <param name="selfRegenerationTimer">the timer</param>
-        /// <returns>the new time</returns>
         protected override int EnduranceRegenerationTimerCallback(ECSGameTimer selfRegenerationTimer)
         {
-            if (Client.ClientState != GameClient.eClientState.Playing)
-                return EnduranceRegenerationPeriod;
-
-            LastEnduTick = GameLoop.GameLoopTime;
-
             bool sprinting = IsSprinting;
 
             if (Endurance < MaxEndurance || sprinting)
             {
-                int regen = GetModified(eProperty.EnduranceRegenerationRate);  //default is 1
-                int endchant = GetModified(eProperty.FatigueConsumption);      //Pull chant/buff value
-                var charge = EffectListService.GetEffectOnTarget(this, eEffect.Charge);
+                int regen = GetModified(eProperty.EnduranceRegenerationRate);
+                int endChant = GetModified(eProperty.FatigueConsumption);
+                ECSGameEffect charge = EffectListService.GetEffectOnTarget(this, eEffect.Charge);
+                int longWind = 5;
 
-                Regen = regen;
-                Endchant = endchant;
-
-                int longwind = 5;
                 if (sprinting && IsMoving)
                 {
                     if (charge is null)
                     {
-                        #region Calculation : AtlasOF_LongWind
-                        // --- [START] --- AtlasOF_EtherealBond --------------------------------------------------------
                         AtlasOF_LongWindAbility raLongWind = GetAbility<AtlasOF_LongWindAbility>();
+
                         if (raLongWind != null)
-                        {
-                            longwind -= (raLongWind.GetAmountForLevel(CalculateSkillLevel(raLongWind)) * 5 / 100);
-                        }
-                        // --- [START] --- AtlasOF_EtherealBond --------------------------------------------------------
-                        #endregion
+                            longWind -= raLongWind.GetAmountForLevel(CalculateSkillLevel(raLongWind)) * 5 / 100;
 
-                        regen -= longwind;
+                        regen -= longWind;
 
-                        if (endchant > 1) regen = (int)Math.Ceiling(regen * endchant * 0.01);
+                        if (endChant > 1)
+                            regen = (int) Math.Ceiling(regen * endChant * 0.01);
 
-                        if (Endurance + regen > MaxEndurance - longwind)
-                        {
-                            regen -= (Endurance + regen) - (MaxEndurance - longwind);
-                        }
+                        if (Endurance + regen > MaxEndurance - longWind)
+                            regen -= Endurance + regen - (MaxEndurance - longWind);
                     }
                 }
-                RegenRateAtChange = regen;
+
                 if (regen != 0)
-                {
                     ChangeEndurance(this, eEnduranceChangeType.Regenerate, regen);
-                }
             }
 
             if (sprinting)
@@ -2706,7 +2645,7 @@ namespace DOL.GS
                     Sprint(false);
             }
             else if (Endurance >= MaxEndurance)
-                selfRegenerationTimer.Stop();
+                return 0;
 
             ushort rate = EnduranceRegenerationPeriod;
 
@@ -3293,21 +3232,16 @@ namespace DOL.GS
 
             lock (((ICollection)m_specialization).SyncRoot)
             {
-                // search for existing key
-                if (!m_specialization.ContainsKey(skill.KeyName))
+                if (m_specialization.TryGetValue(skill.KeyName, out Specialization specialization))
                 {
-                    // Adding
-                    m_specialization.Add(skill.KeyName, skill);
-
-                    if (notify)
-                        Out.SendMessage(LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.AddSpecialisation.YouLearn", skill.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
-
+                    specialization.Level = skill.Level;
+                    return;
                 }
-                else
-                {
-                    // Updating
-                    m_specialization[skill.KeyName].Level = skill.Level;
-                }
+
+                m_specialization.Add(skill.KeyName, skill);
+
+                if (notify)
+                    Out.SendMessage(LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.AddSpecialisation.YouLearn", skill.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
             }
         }
 
@@ -3492,7 +3426,7 @@ namespace DOL.GS
                 && ControlledBrain is IControlledBrain brain && brain.Body is GameSummonedPet pet
                 && pet.ControlledNpcList != null)
                 foreach (ABrain subBrain in pet.ControlledNpcList)
-                    if (subBrain != null && subBrain.Body is BDSubPet subPet && subPet.PetSpecLine == specLine.KeyName)
+                    if (subBrain != null && subBrain.Body is BdSubPet subPet && subPet.PetSpecLine == specLine.KeyName)
                         subPet.SortSpells();
 
             return specPoints;
@@ -3538,20 +3472,16 @@ namespace DOL.GS
         /// Retrives a specific specialization by name
         /// </summary>
         /// <param name="name">the name of the specialization line</param>
-        /// <param name="caseSensitive">false for case-insensitive compare</param>
         /// <returns>found specialization or null</returns>
-        public virtual Specialization GetSpecializationByName(string name, bool caseSensitive = false)
+        public virtual Specialization GetSpecializationByName(string name)
         {
             Specialization spec = null;
 
             lock (((ICollection)m_specialization).SyncRoot)
             {
-                if (caseSensitive && m_specialization.ContainsKey(name))
-                    spec = m_specialization[name];
-
                 foreach (KeyValuePair<string, Specialization> entry in m_specialization)
                 {
-                    if (entry.Key.ToLower().Equals(name.ToLower()))
+                    if (entry.Key.Equals(name, StringComparison.OrdinalIgnoreCase))
                     {
                         spec = entry.Value;
                         break;
@@ -3866,12 +3796,10 @@ namespace DOL.GS
                         List<Skill> sps = new List<Skill>();
                         SpellLine key = spells.Keys.FirstOrDefault(el => el.ID == sl.ID);
 
-                        if (key != null && spells.ContainsKey(key))
+                        if (key != null && spells.TryGetValue(key, out List<Skill> spellsInLine))
                         {
-                            foreach (Skill sp in spells[key])
-                            {
+                            foreach (Skill sp in spellsInLine)
                                 sps.Add(sp);
-                            }
                         }
 
                         working.Add(new Tuple<SpellLine, List<Skill>>(sl, sps));
@@ -5722,7 +5650,7 @@ namespace DOL.GS
 
             // Level up pets and subpets
             if (DOL.GS.ServerProperties.Properties.PET_LEVELS_WITH_OWNER &&
-                ControlledBrain is ControlledNpcBrain brain && brain.Body is GameSummonedPet pet)
+                ControlledBrain is ControlledMobBrain brain && brain.Body is GameSummonedPet pet)
             {
                 if (pet.SetPetLevel())
                 {
@@ -6127,9 +6055,9 @@ namespace DOL.GS
                 IsOnHorse = false;
             base.OnAttackedByEnemy(ad);
 
-            if(ControlledBrain != null && ControlledBrain is ControlledNpcBrain)
+            if(ControlledBrain != null && ControlledBrain is ControlledMobBrain)
             {
-                var brain = (ControlledNpcBrain) ControlledBrain;
+                var brain = (ControlledMobBrain) ControlledBrain;
                 brain.OnOwnerAttacked(ad);
             }
 
@@ -6166,17 +6094,14 @@ namespace DOL.GS
                 case eAttackResult.HitStyle:
                 case eAttackResult.HitUnstyled:
                 {
-                    if (ad.Damage == -1)
+                    // If attacked by a non-damaging spell, we should not show damage numbers.
+                    // We need to check the damage on the spell here, not in the AD, since this could in theory be a damaging spell that had its damage modified to 0.
+                    if (ad.AttackType == AttackData.eAttackType.Spell && ad.SpellHandler.Spell?.Damage == 0)
                         break;
 
-                    if (ad.AttackType == AttackData.eAttackType.Spell)
+                    if (IsStealthed && !effectListComponent.ContainsEffectForEffectType(eEffect.Vanish))
                     {
-                        // If attacked by a non-damaging spell, we should not show damage numbers.
-                        // We need to check the damage on the spell here, not in the AD, since this could in theory be a damaging spell that had its damage modified to 0.
-                        if (ad.SpellHandler.Spell.Damage == 0)
-                            break;
-
-                        if (ad.SpellHandler.Spell.SpellType != eSpellType.DamageOverTime && !effectListComponent.ContainsEffectForEffectType(eEffect.Vanish))
+                        if (ad.AttackType != AttackData.eAttackType.Spell || ad.SpellHandler.Spell.SpellType != eSpellType.DamageOverTime)
                             Stealth(false);
                     }
 
@@ -6379,6 +6304,27 @@ namespace DOL.GS
                 Mana += (int)((damageAmount + criticalAmount) * 0.25);
         }
 
+        public override int MeleeAttackRange
+        {
+            get
+            {
+                int range = 150; // Increase default melee range to 150 to help with higher latency players. Was 128.
+
+                if (TargetObject is GameKeepComponent)
+                    range += 150;
+                else
+                {
+                    if (TargetObject is GameLiving target && target.IsMoving)
+                        range += 32;
+
+                    if (IsMoving)
+                        range += 32;
+                }
+
+                return range;
+            }
+        }
+
         /// <summary>
         /// Gets the effective AF of this living.  This is used for the overall AF display
         /// on the character but not used in any damage equations.
@@ -6520,6 +6466,19 @@ namespace DOL.GS
             }
         }
 
+        public override int WeaponSpecLevel(eObjectType objectType, int slotPosition)
+        {
+            // Use axe spec if left hand axe is not in the left hand slot.
+            if (objectType == eObjectType.LeftAxe && slotPosition != Slot.LEFTHAND)
+                return GameServer.ServerRules.GetObjectSpecLevel(this, eObjectType.Axe);
+
+            // Use left axe spec if axe is in the left hand slot.
+            if (slotPosition == Slot.LEFTHAND && objectType == eObjectType.Axe)
+                return GameServer.ServerRules.GetObjectSpecLevel(this, eObjectType.LeftAxe);
+
+            return GameServer.ServerRules.GetObjectSpecLevel(this, objectType);
+        }
+
         /// <summary>
         /// determines current weaponspeclevel
         /// </summary>
@@ -6527,14 +6486,8 @@ namespace DOL.GS
         {
             if (weapon == null)
                 return 0;
-            // use axe spec if left hand axe is not in the left hand slot
-            if (weapon.Object_Type == (int)eObjectType.LeftAxe && weapon.SlotPosition != Slot.LEFTHAND)
-                return GameServer.ServerRules.GetObjectSpecLevel(this, eObjectType.Axe);
-            // use left axe spec if axe is in the left hand slot
-            if (weapon.SlotPosition == Slot.LEFTHAND
-                && weapon.Object_Type == (int)eObjectType.Axe)
-                return GameServer.ServerRules.GetObjectSpecLevel(this, eObjectType.LeftAxe);
-            return GameServer.ServerRules.GetObjectSpecLevel(this, (eObjectType)weapon.Object_Type);
+
+            return WeaponSpecLevel((eObjectType) weapon.Object_Type, weapon.SlotPosition);
         }
 
         public virtual String GetWeaponSpec(DbInventoryItem weapon)
@@ -6582,7 +6535,7 @@ namespace DOL.GS
 
             int classBaseWeaponSkill = weapon.SlotPosition == (int)eInventorySlot.DistanceWeapon ? CharacterClass.WeaponSkillRangedBase : CharacterClass.WeaponSkillBase;
             double weaponSkill = Level * classBaseWeaponSkill / 200.0 * (1 + 0.01 * GetWeaponStat(weapon) / 2) * Effectiveness;
-            return Math.Max(0, weaponSkill * GetModified(eProperty.WeaponSkill) * 0.01);
+            return Math.Max(1, weaponSkill * GetModified(eProperty.WeaponSkill) * 0.01);
         }
 
         /// <summary>
@@ -6812,7 +6765,7 @@ namespace DOL.GS
 
             CharacterClass.Die(killer);
 
-            bool realmDeath = killer != null && killer.Realm != eRealm.None && killer.Realm != Realm;
+            bool killingBlowByEnemyRealm = killer != null && killer.Realm != eRealm.None && killer.Realm != Realm;
 
             TargetObject = null;
             UpdateWaterBreathState(eWaterBreath.None);
@@ -6836,7 +6789,7 @@ namespace DOL.GS
 
             if (killer == null)
             {
-                if (realmDeath)
+                if (killingBlowByEnemyRealm)
                 {
                     playerMessage = LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.Die.KilledLocation", GetName(0, true), location);
                     publicMessage = LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.Die.KilledLocation", GetName(0, true), location);
@@ -6859,7 +6812,7 @@ namespace DOL.GS
                 else
                 {
                     messageDistance = 0;
-                    if (realmDeath)
+                    if (killingBlowByEnemyRealm)
                     {
                         playerMessage = LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.Die.KilledByLocation", GetName(0, true), killer.GetName(1, false), location);
                         publicMessage = LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.Die.KilledByLocation", GetName(0, true), killer.GetName(1, false), location);
@@ -6929,7 +6882,7 @@ namespace DOL.GS
                     (player != killer) && (
                         (killer != null && killer is GamePlayer && GameServer.ServerRules.IsSameRealm((GamePlayer)killer, player, true))
                         || (GameServer.ServerRules.IsSameRealm(this, player, true))
-                        || (ServerProperties.Properties.DEATH_MESSAGES_ALL_REALMS && (killer is GamePlayer || killer is GameKeepGuard))) //Only show Player/Guard kills if shown to all realms
+                        || (Properties.DEATH_MESSAGES_ALL_REALMS && (killer is GamePlayer || killer is GameKeepGuard))) //Only show Player/Guard kills if shown to all realms
                 )
                     if (player == this)
                         player.Out.SendMessage(playerMessage, messageType, eChatLoc.CL_SystemWindow);
@@ -7000,32 +6953,40 @@ namespace DOL.GS
                     xpLossPercent = MaxLevel - 40;
                 }
 
-                if (realmDeath || killer?.Realm == Realm) //Live PvP servers have 3 con loss on pvp death, can be turned off in server properties -Unty
+                if (killingBlowByEnemyRealm || InCombatPvP || killer?.Realm == Realm)
                 {
-                    int conpenalty = 0;
+                    LastDeathPvP = true;
+                    int conPenalty = 0;
+
                     switch (GameServer.Instance.Configuration.ServerType)
                     {
                         case EGameServerType.GST_Normal:
+                        {
                             Out.SendMessage(LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.Die.DeadRVR"), eChatType.CT_YouDied, eChatLoc.CL_SystemWindow);
                             xpLossPercent = 0;
                             m_deathtype = eDeathType.RvR;
                             break;
-
+                        }
                         case EGameServerType.GST_PvP:
+                        {
                             Out.SendMessage(LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.Die.DeadRVR"), eChatType.CT_YouDied, eChatLoc.CL_SystemWindow);
                             xpLossPercent = 0;
                             m_deathtype = eDeathType.PvP;
-                            if (ServerProperties.Properties.PVP_DEATH_CON_LOSS)
+
+                            // Live PvP servers have 3 con loss on pvp death.
+                            if (Properties.PVP_DEATH_CON_LOSS)
                             {
-                                conpenalty = 3;
-                                TempProperties.SetProperty(DEATH_CONSTITUTION_LOSS_PROPERTY, conpenalty);
+                                conPenalty = 3;
+                                TempProperties.SetProperty(DEATH_CONSTITUTION_LOSS_PROPERTY, conPenalty);
                             }
+
                             break;
+                        }
                     }
                 }
                 else
                 {
-                    if (Level >= ServerProperties.Properties.PVE_EXP_LOSS_LEVEL)
+                    if (Level >= Properties.PVE_EXP_LOSS_LEVEL)
                     {
                         Out.SendMessage(LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.Die.LoseExperience"), eChatType.CT_YouDied, eChatLoc.CL_SystemWindow);
                         // if this is the first death in level, you lose only half the penalty
@@ -7048,7 +7009,7 @@ namespace DOL.GS
                         TempProperties.SetProperty(DEATH_EXP_LOSS_PROPERTY, xpLoss);
                     }
 
-                    if (Level >= ServerProperties.Properties.PVE_CON_LOSS_LEVEL)
+                    if (Level >= Properties.PVE_CON_LOSS_LEVEL)
                     {
                         int conLoss = DeathCount;
                         if (conLoss > 3)
@@ -7057,9 +7018,6 @@ namespace DOL.GS
                             conLoss = 1;
                         TempProperties.SetProperty(DEATH_CONSTITUTION_LOSS_PROPERTY, conLoss);
                     }
-
-                    if (realmDeath)
-                        LastDeathPvP = true;
                 }
                 GameEventMgr.AddHandler(this, GamePlayerEvent.Revive, new DOLEventHandler(OnRevive));
             }
@@ -7202,7 +7160,7 @@ namespace DOL.GS
             if (partner == null)
                 return false;
 
-            if (living is GameNPC npc && npc.Brain is ControlledNpcBrain brain)
+            if (living is GameNPC npc && npc.Brain is ControlledMobBrain brain)
                 living = brain.GetPlayerOwner();
 
             return partner == living;
@@ -9120,6 +9078,7 @@ namespace DOL.GS
             Y = y;
             Z = z;
             Heading = heading;
+            IsSitting = false;
 
             if (regionID != CurrentRegionID)
             {
@@ -9192,12 +9151,8 @@ namespace DOL.GS
         /// </summary>
         public virtual void RefreshWorld()
         {
-            foreach (GameNPC npc in GetNPCsInRadius(WorldMgr.VISIBILITY_DISTANCE * 2))
-            {
-                Out.SendNPCCreate(npc);
-                if (npc.Inventory != null)
-                    Out.SendLivingEquipmentUpdate(npc);
-            }
+            foreach (GameNPC npc in GetNPCsInRadius(WorldMgr.VISIBILITY_DISTANCE))
+                ClientService.CreateNpcForPlayer(this, npc);
 
             foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
             {
@@ -9668,7 +9623,10 @@ namespace DOL.GS
             get => m_diving;
             set
             {
-                if (!CurrentZone.IsDivingEnabled && value && Client.Account.PrivLevel == 1)
+                // Force the diving state instead of trusting the client.
+                value = IsUnderwater;
+
+                if (value && !CurrentZone.IsDivingEnabled && Client.Account.PrivLevel == 1)
                 {
                     Z += 1;
                     Out.SendPlayerJump(false);
@@ -11726,10 +11684,9 @@ namespace DOL.GS
             //existing skill levels for this player
             LoadSkillsFromCharacter();
             LoadCraftingSkills();
-
             VerifySpecPoints();
-
             LoadQuests();
+            FactionMgr.LoadAllAggroToFaction(this);
 
             // Load Task object of player ...
             var tasks = DOLDB<DbTask>.SelectObjects(DB.Column("Character_ID").IsEqualTo(InternalID));
@@ -12784,8 +12741,7 @@ namespace DOL.GS
         {
             lock (CraftingLock)
             {
-                if (!m_craftingSkills.ContainsKey(skill)) return -1;
-                return m_craftingSkills[skill];
+                return m_craftingSkills.TryGetValue(skill, out int value) ? value : -1;
             }
         }
 

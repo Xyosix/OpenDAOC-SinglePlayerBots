@@ -31,11 +31,7 @@ namespace DOL.GS
 		{
 			return base.AttackDamage(weapon) * Strength / 100;
 		}
-		public override int AttackRange
-		{
-			get { return 350; }
-			set { }
-		}
+		public override int MeleeAttackRange => 350;
 		public override bool HasAbility(string keyName)
 		{
 			if (IsAlive && keyName == GS.Abilities.CCImmunity)
@@ -70,7 +66,6 @@ namespace DOL.GS
 			RespawnInterval = ServerProperties.Properties.SET_EPIC_GAME_ENCOUNTER_RESPAWNINTERVAL * 60000;//1min is 60000 miliseconds
 
 			Faction = FactionMgr.GetFactionByID(64);
-			Faction.AddFriendFaction(FactionMgr.GetFactionByID(64));
 
 			AmphiptereBrain sbrain = new AmphiptereBrain();
 			SetOwnBrain(sbrain);
@@ -216,7 +211,7 @@ namespace DOL.AI.Brain
 							Body.StopFollowing();
 					}
 					Body.TurnTo(Body.TargetObject);
-					if (Util.Chance(25) && !Body.IsCasting && !target.effectListComponent.ContainsEffectForEffectType(eEffect.DamageOverTime))
+					if (Util.Chance(25) && !Body.IsCasting && !target.IsPoisoned)
 						Body.CastSpell(Amphiptere_Dot, SkillBase.GetSpellLine(GlobalSpellsLines.Mob_Spells), false);
 					if (Util.Chance(25) && !Body.IsCasting && !target.effectListComponent.ContainsEffectForEffectType(eEffect.Disease))
 						Body.CastSpell(AmphiptereDisease, SkillBase.GetSpellLine(GlobalSpellsLines.Mob_Spells), false);
@@ -372,7 +367,6 @@ namespace DOL.GS
 			Level = (byte)Util.Random(61, 63);
 			MaxSpeedBase = 225;
 			Faction = FactionMgr.GetFactionByID(64);
-			Faction.AddFriendFaction(FactionMgr.GetFactionByID(64));
 
 			AmphiptereAddsBrain sbrain = new AmphiptereAddsBrain();
 			SetOwnBrain(sbrain);

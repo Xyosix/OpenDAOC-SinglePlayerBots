@@ -636,6 +636,40 @@ namespace DOL.GS
             }
         }
 
+        public static eEffect GetImmunityEffectFromSpell(Spell spell)
+        {
+            switch (spell.SpellType)
+            {
+                case eSpellType.Mesmerize:
+                    return eEffect.MezImmunity;
+                case eSpellType.StyleStun:
+                case eSpellType.Stun:
+                    return eEffect.StunImmunity;
+                case eSpellType.SpeedDecrease:
+                case eSpellType.DamageSpeedDecreaseNoVariance:
+                case eSpellType.DamageSpeedDecrease:
+                    return eEffect.SnareImmunity;
+                case eSpellType.Nearsight:
+                    return eEffect.NearsightImmunity;
+                default:
+                    return eEffect.Unknown;
+            }
+        }
+
+        public static eEffect GetNpcImmunityEffectFromSpell(Spell spell)
+        {
+            switch (spell.SpellType)
+            {
+                case eSpellType.Mesmerize:
+                    return eEffect.NPCMezImmunity;
+                case eSpellType.StyleStun:
+                case eSpellType.Stun:
+                    return eEffect.NPCStunImmunity;
+                default:
+                    return eEffect.Unknown;
+            }
+        }
+
         public static void SendSpellResistAnimation(ECSGameSpellEffect e)
         {
             if (e is null)

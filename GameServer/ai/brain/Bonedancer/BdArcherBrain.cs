@@ -7,7 +7,7 @@ namespace DOL.AI.Brain
     /// <summary>
     /// A brain that can be controlled
     /// </summary>
-    public class BDCasterBrain : BDPetBrain
+    public class BdArcherBrain : BdPetBrain
     {
         /// <summary>
         /// Defines a logger for this class.
@@ -18,14 +18,23 @@ namespace DOL.AI.Brain
         /// Constructs new controlled npc brain
         /// </summary>
         /// <param name="owner"></param>
-        public BDCasterBrain(GameLiving owner) : base(owner) { }
+        public BdArcherBrain(GameLiving owner) : base(owner) { }
 
         #region AI
 
         /// <summary>
-        /// Checks the Abilities
+        /// No Abilities or spells
         /// </summary>
         public override void CheckAbilities() { }
+        public override bool CheckSpells(eCheckSpellType type) { return false; }
+
+        public override void Attack(GameObject target)
+        {
+            if (m_orderAttackTarget != target)
+                Body.SwitchWeapon(eActiveWeaponSlot.Distance);
+
+            base.Attack(target);
+        }
 
         #endregion
     }

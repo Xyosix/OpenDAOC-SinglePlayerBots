@@ -26,9 +26,9 @@ using DOL.Language;
 
 namespace DOL.GS
 {
-    public class CommanderPet : BDPet
-    {
-        private new static readonly log4net.ILog log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+	public class CommanderPet : BdPet
+	{
+		private static new readonly log4net.ILog log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
         public enum eCommanderType
         {
@@ -919,11 +919,11 @@ namespace DOL.GS
                     }
                 }
 
-                //Found it, lets remove it
-                if (found)
-                {
-                    if (controlledNpc.Body.Brain is ControlledNpcBrain controlledNpcBrain)
-                        controlledNpcBrain.StripCastedBuffs();
+				//Found it, lets remove it
+				if (found)
+				{
+					if (controlledNpc.Body.Brain is ControlledMobBrain controlledNpcBrain)
+						controlledNpcBrain.StripCastedBuffs();
 
                     m_controlledBrain[i] = null;
                     UpdatePetCount(false);

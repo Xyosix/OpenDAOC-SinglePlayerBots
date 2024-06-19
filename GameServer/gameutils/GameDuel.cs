@@ -24,7 +24,7 @@ namespace DOL.GS
 
         public GameLiving GetPartnerOf(GameLiving living)
         {
-            if (living is GameNPC npc && npc.Brain is ControlledNpcBrain brain)
+            if (living is GameNPC npc && npc.Brain is ControlledMobBrain brain)
                 living = brain.GetLivingOwner();
 
             return living == Starter ? Target : Starter;

@@ -267,41 +267,42 @@ namespace DOL.GS
             }
         }
 
-        public void AddStyle(Style st, bool notify)
+        public void AddStyle(Style style, bool notify)
         {
             var p = _owner as GamePlayer;
 
             lock (lockStyleList)
             {
-                if (m_styles.ContainsKey(st.ID))
+                if (m_styles.TryGetValue(style.ID, out Style existingStyle))
                 {
-                    m_styles[st.ID].Level = st.Level;
+                    existingStyle.Level = style.Level;
+                    return;
                 }
-                else
+
+                m_styles.Add(style.ID, style);
+
+                if (!notify)
+                    return;
+
+
+                p.Out.SendMessage(LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.RefreshSpec.YouLearn", style.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+
+                string message = null;
+
+                if (Style.eOpening.Offensive == style.OpeningRequirementType)
                 {
-                    m_styles.Add(st.ID, st);
-
-                    // Verbose
-                    if (notify)
+                    switch (style.AttackResultRequirement)
                     {
-                        Style style = st;
-                        p.Out.SendMessage(LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.RefreshSpec.YouLearn", style.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+                        case Style.eAttackResultRequirement.Style:
+                        case Style.eAttackResultRequirement.Hit: // TODO: make own message for hit after styles DB is updated
 
-                        string message = null;
+                            Style reqStyle = SkillBase.GetStyleByID(style.OpeningRequirementValue, p.CharacterClass.ID);
 
-                        if (Style.eOpening.Offensive == style.OpeningRequirementType)
-                        {
-                            switch (style.AttackResultRequirement)
-                            {
-                                case Style.eAttackResultRequirement.Style:
-                                case Style.eAttackResultRequirement.Hit: // TODO: make own message for hit after styles DB is updated
+                            if (reqStyle == null)
+                                message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.RefreshSpec.AfterStyle", "(style " + style.OpeningRequirementValue + " not found)");
 
-                                Style reqStyle = SkillBase.GetStyleByID(style.OpeningRequirementValue, p.CharacterClass.ID);
-
-                                if (reqStyle == null)
-                                    message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.RefreshSpec.AfterStyle", "(style " + style.OpeningRequirementValue + " not found)");
-
-                                else message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.RefreshSpec.AfterStyle", reqStyle.Name);
+                            else
+                                message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.RefreshSpec.AfterStyle", reqStyle.Name);
 
                                 break;
                                 case Style.eAttackResultRequirement.Miss:
@@ -349,10 +350,8 @@ namespace DOL.GS
                             }
                         }
 
-                        if (!string.IsNullOrEmpty(message))
-                            p.Out.SendMessage(message, eChatType.CT_System, eChatLoc.CL_SystemWindow);
-                    }
-                }
+                if (!string.IsNullOrEmpty(message))
+                    p.Out.SendMessage(message, eChatType.CT_System, eChatLoc.CL_SystemWindow);
             }
         }
     }

@@ -62,6 +62,8 @@ namespace DOL.GS.Scripts
         public bool IsWithinRadius(GameObject obj, int radius);
         public bool IsWithinRadius(IPoint3D point, int radius, bool ignoreZ);
         public List<GamePlayer> GetPlayersInRadius(ushort radiusToCheck);
+        public List<GameNPC> GetNPCsInRadius(ushort radiusToCheck);
+        public int GetConLevel(GameObject compare);
 
         public bool IsControlledNPC(GameNPC npc);
         public void CommandNpcRelease();
@@ -142,6 +144,8 @@ namespace DOL.GS.Scripts
         public int Mana { get; set; }
         public int MaxMana { get; }
 
+        public int PowerRegenStackingBonus { get; set; }
+
         public int Endurance { get; set; }
         public short MaxSpeedBase { get; set; }
 
@@ -150,6 +154,7 @@ namespace DOL.GS.Scripts
         public int Quickness { get; }
         public int Intelligence { get; }
 
+        public Zone CurrentZone { get; }
         public Region CurrentRegion { get; set; }
         public ushort CurrentRegionID { get; set; }
         public int Z { get; }

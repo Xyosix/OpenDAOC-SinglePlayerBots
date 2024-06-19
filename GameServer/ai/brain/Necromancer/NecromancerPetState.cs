@@ -2,20 +2,7 @@
 
 namespace DOL.AI.Brain
 {
-    public class NecromancerPetState_WAKING_UP : ControlledNPCState_WAKING_UP
-    {
-        public NecromancerPetState_WAKING_UP(NecromancerPetBrain brain) : base(brain)
-        {
-            StateType = eFSMStateType.WAKING_UP;
-        }
-
-        public override void Think()
-        {
-            base.Think();
-        }
-    }
-
-    public class NecromancerPetState_DEFENSIVE : ControlledNPCState_DEFENSIVE
+    public class NecromancerPetState_DEFENSIVE : ControlledMobState_DEFENSIVE
     {
         public NecromancerPetState_DEFENSIVE(NecromancerPetBrain brain) : base(brain)
         {
@@ -34,7 +21,7 @@ namespace DOL.AI.Brain
         }
     }
 
-    public class NecromancerPetState_AGGRO : ControlledNPCState_AGGRO
+    public class NecromancerPetState_AGGRO : ControlledMobState_AGGRO
     {
         public NecromancerPetState_AGGRO(NecromancerPetBrain brain) : base(brain)
         {
@@ -53,7 +40,7 @@ namespace DOL.AI.Brain
         }
     }
 
-    public class NecromancerPetState_PASSIVE : ControlledNPCState_PASSIVE
+    public class NecromancerPetState_PASSIVE : ControlledMobState_PASSIVE
     {
         public NecromancerPetState_PASSIVE(NecromancerPetBrain brain) : base(brain)
         {

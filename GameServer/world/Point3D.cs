@@ -124,17 +124,20 @@ namespace DOL.GS
             return IsWithinRadius(point, radius, false);
         }
 
-        /// <summary>
-        /// Determine if another point is within a given radius, optionally ignoring Z values
-        /// </summary>
-        /// <param name="point">Target point</param>
-        /// <param name="radius">Radius</param>
-        /// <param name="ignoreZ">ignore Z</param>
-        /// <returns>True if the point is within the radius, otherwise false</returns>
-        public bool IsWithinRadius(IPoint3D point, int radius, bool ignoreZ)
-        {
-            if (radius > ushort.MaxValue)
-                return GetDistanceTo(point, ignoreZ ? 0.0 : 1.0) <= radius;
+		/// <summary>
+		/// Determine if another point is within a given radius, optionally ignoring Z values
+		/// </summary>
+		/// <param name="point">Target point</param>
+		/// <param name="radius">Radius</param>
+		/// <param name="ignoreZ">ignore Z</param>
+		/// <returns>True if the point is within the radius, otherwise false</returns>
+		public bool IsWithinRadius(IPoint3D point, int radius, bool ignoreZ)
+		{
+			if (radius < 0)
+				return false;
+
+			if (radius > ushort.MaxValue)
+				return GetDistanceTo(point, ignoreZ ? 0.0 : 1.0) <= radius;
 
             uint rSquared = (uint)radius * (uint)radius;
             int dx = X - point.X;

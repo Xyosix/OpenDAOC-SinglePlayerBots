@@ -35,7 +35,7 @@ namespace DOL.GS.Scripts
 
 			// right hand
 			VisibleActiveWeaponSlots = (byte) eActiveWeaponSlot.Standard;			
-			ScalingFactor = 40;
+			WeaponSkillScalingFactor = 40;
 			base.SetOwnBrain(new JarlOrmarrBrain());
 			LoadedFromScript = false; //load from database
 			SaveIntoDatabase();
@@ -47,15 +47,7 @@ namespace DOL.GS.Scripts
 		{
 			return base.AttackDamage(weapon) * Strength / 100;
 		}
-		public override int AttackRange
-		{
-			get
-			{
-				return 350;
-			}
-			set
-			{ }
-		}
+		public override int MeleeAttackRange => 350;
 		public override bool HasAbility(string keyName)
 		{
 			if (IsAlive && keyName == GS.Abilities.CCImmunity)

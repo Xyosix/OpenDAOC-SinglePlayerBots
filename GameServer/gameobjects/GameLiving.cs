@@ -209,13 +209,11 @@ namespace DOL.GS
                 Interlocked.Decrement(ref m_diseasedCount);
         }
 
-        /// <summary>
-        /// Gets diseased state
-        /// </summary>
-        public virtual bool IsDiseased
-        {
-            get { return m_diseasedCount > 0; }
-        }
+		/// <summary>
+		/// Gets diseased state
+		/// </summary>
+		public virtual bool IsDiseased => m_diseasedCount > 0;
+		public virtual bool IsPoisoned => effectListComponent.ContainsEffectForEffectType(eEffect.DamageOverTime);
 
         protected bool m_isEngaging = false;
 
@@ -492,26 +490,7 @@ namespace DOL.GS
             }
         }
 
-        /// <summary>
-        /// Returns the AttackRange of this living
-        /// </summary>
-        public virtual int AttackRange
-        {
-            get
-            {
-                //Mobs have a good distance range with distance weapons
-                //automatically
-                if (ActiveWeaponSlot == eActiveWeaponSlot.Distance)
-                {
-                    return Math.Max(32, (int)(2000.0 * GetModified(eProperty.ArcheryRange) * 0.01));
-                }
-                //Normal mob attacks have 200 ...
-                //TODO dragon, big mobs etc...
-                return 200;
-            }
-
-            set { }
-        }
+        public virtual int MeleeAttackRange => 200;
 
         /// <summary>
         /// calculates weapon stat
@@ -679,15 +658,18 @@ namespace DOL.GS
             get { return 0; }
         }
 
-        /// <summary>
-        /// determines the spec level for current AttackWeapon
-        /// </summary>
-        public virtual int WeaponSpecLevel(DbInventoryItem weapon)
-        {
-            if (weapon == null) return 0;
+		public virtual int WeaponSpecLevel(eObjectType objectType, int slotPosition)
+		{
+			return 0;
+		}
 
-            return 0;   // TODO
-        }
+		/// <summary>
+		/// determines the spec level for current AttackWeapon
+		/// </summary>
+		public virtual int WeaponSpecLevel(DbInventoryItem weapon)
+		{
+			return 0;
+		}
 
         /// <summary>
         /// Gets the weapondamage of currently used weapon
@@ -952,108 +934,27 @@ namespace DOL.GS
 			42949672960			// xp for level 100
 		};
 
-        /// <summary>
-        /// Holds the level of target at which no exp is given
-        /// </summary>
-        public static readonly int[] NoXPForLevel =
-        {
-            -3,		//for level 0
-			-2,		//for level 1
-			-1,		//for level 2
-			0,		//for level 3
-			1,		//for level 4
-			2,		//for level 5
-			3,		//for level 6
-			4,		//for level 7
-			5,		//for level 8
-			6,		//for level 9
-			6,		//for level 10
-			6,		//for level 11
-			6,		//for level 12
-			7,		//for level 13
-			8,		//for level 14
-			9,		//for level 15
-			10,		//for level 16
-			11,		//for level 17
-			12,		//for level 18
-			13,		//for level 19
-			13,		//for level 20
-			13,		//for level 21
-			13,		//for level 22
-			14,		//for level 23
-			15,		//for level 24
-			16,		//for level 25
-			17,		//for level 26
-			18,		//for level 27
-			19,		//for level 28
-			20,		//for level 29
-			21,		//for level 30
-			22,		//for level 31
-			23,		//for level 32
-			24,		//for level 33
-			25,		//for level 34
-			25,		//for level 35
-			25,		//for level 36
-			25,		//for level 37
-			25,		//for level 38
-			25,		//for level 39
-			25,		//for level 40
-			26,		//for level 41
-			27,		//for level 42
-			28,		//for level 43
-			29,		//for level 44
-			30,		//for level 45
-			31,		//for level 46
-			32,		//for level 47
-			33,		//for level 48
-			34,		//for level 49
-			35,		//for level 50
-		};
+		#endregion
 
-        #endregion XP array
+		/// <summary>
+		/// Checks whether object is grey con to this living
+		/// </summary>
+		/// <param name="obj"></param>
+		/// <returns></returns>
+		public virtual bool IsObjectGreyCon(GameObject obj)
+		{
+			return (ConColor) GetConLevel(obj) <= ConColor.GREY;
+		}
 
-        /// <summary>
-        /// Checks whether object is grey con to this living
-        /// </summary>
-        /// <param name="obj"></param>
-        /// <returns></returns>
-        public virtual bool IsObjectGreyCon(GameObject obj)
-        {
-            return IsObjectGreyCon(this, obj);
-        }
-
-        /// <summary>
-        /// Checks whether target is grey con to source
-        /// </summary>
-        /// <param name="source"></param>
-        /// <param name="target"></param>
-        /// <returns></returns>
-        public static bool IsObjectGreyCon(GameObject source, GameObject target)
-        {
-            int sourceLevel = source.EffectiveLevel;
-            if (sourceLevel < GameLiving.NoXPForLevel.Length)
-            {
-                //if target level is less or equals to level that is grey to source
-                if (target.EffectiveLevel <= GameLiving.NoXPForLevel[sourceLevel])
-                    return true;
-            }
-            else
-            {
-                if (source.GetConLevel(target) <= -3)
-                    return true;
-            }
-            return false;
-        }
-
-        /// <summary>
-        /// Calculates the experience value of this living for special levels
-        /// </summary>
-        /// <param name="level"></param>
-        /// <returns></returns>
-        public virtual long GetExperienceValueForLevel(int level)
-        {
-            return GameServer.ServerRules.GetExperienceForLiving(level);
-        }
+		/// <summary>
+		/// Calculates the experience value of this living for special levels
+		/// </summary>
+		/// <param name="level"></param>
+		/// <returns></returns>
+		public virtual long GetExperienceValueForLevel(int level)
+		{
+			return GameServer.ServerRules.GetExperienceForLiving(level);
+		}
 
         /// <summary>
         /// Gets/sets the targetObject's visibility
@@ -1080,32 +981,13 @@ namespace DOL.GS
 		/// </summary>
 		public virtual void StartInterruptTimer(int duration, eAttackType attackType, GameLiving attacker)
 		{
-			// Is this really necessary?
-			if (!IsAlive || ObjectState != eObjectState.Active)
-			{
-				InterruptTime = 0;
-				SelfInterruptTime = 0;
-				LastInterrupter = null;
-				return;
-			}
-
 			if (attacker == this)
 			{
 				SelfInterruptTime = GameLoop.GameLoopTime + duration;
 				return;
 			}
 
-			double chance;
-
-			if (attacker is GamePlayer)
-				chance = 99;
-			else
-			{
-				chance = BaseInterruptChance + GetConLevel(attacker) * 10;
-				chance = Math.Clamp(chance, 1, 99);
-			}
-
-			if (!Util.Chance((int) chance))
+			if (!Util.Chance(100 + GetConLevel(attacker) * 15))
 				return;
 
 			// Don't replace the current interrupt with a shorter one.
@@ -1139,15 +1021,10 @@ namespace DOL.GS
 		public virtual bool IsBeingInterrupted => IsBeingInterruptedIgnoreSelfInterrupt || SelfInterruptTime > GameLoop.GameLoopTime;
 		public virtual bool IsBeingInterruptedIgnoreSelfInterrupt => InterruptTime > GameLoop.GameLoopTime;
 
-        /// <summary>
-        /// Base chance this living can be interrupted
-        /// </summary>
-        public virtual int BaseInterruptChance => 95;
-
-        /// <summary>
-        /// How long does an interrupt last?
-        /// </summary>
-        public virtual int SpellInterruptDuration => Properties.SPELL_INTERRUPT_DURATION;
+		/// <summary>
+		/// How long does an interrupt last?
+		/// </summary>
+		public virtual int SpellInterruptDuration => Properties.SPELL_INTERRUPT_DURATION;
 
         /// <summary>
         /// Additional interrupt time if interrupted again
@@ -1884,9 +1761,9 @@ namespace DOL.GS
                 LastAttackTickPvE = GameLoop.GameLoopTime;
             }
 
-            if (this is GameNPC npc)
-            {
-                var brain = npc.Brain as ControlledNpcBrain;
+			if (this is GameNPC npc)
+			{
+				var brain = npc.Brain as ControlledMobBrain;
 
                 if (ad.Target is IGamePlayer)
                 {
@@ -2203,11 +2080,11 @@ namespace DOL.GS
                 }
             }
 
-            if (this is GameNPC npc && npc.Brain is ControlledNpcBrain || this is GameSummonedPet)
+			if (this is GameNPC npc && npc.Brain is ControlledMobBrain || this is GameSummonedPet)
             {
-                List<ECSGameSpellEffect> ownerEffects;
-                ControlledNpcBrain pBrain = (this as GameNPC).Brain as ControlledNpcBrain;
-                GameSummonedPet pet = this as GameSummonedPet;
+				List<ECSGameSpellEffect> ownerEffects;
+				ControlledMobBrain pBrain = (this as GameNPC).Brain as ControlledMobBrain;
+				GameSummonedPet pet = this as GameSummonedPet;
 
                 if (pBrain != null)
                     ownerEffects = pBrain.Owner.effectListComponent.GetSpellEffects(eEffect.MovementSpeedBuff);
@@ -3080,234 +2957,174 @@ namespace DOL.GS
                     return;
                 }
 
-                m_powerRegenerationTimer.Start(PowerRegenerationPeriod);
-            }
-        }
+				m_powerRegenerationTimer.Start(PowerRegenerationPeriod);
+			}
+		}
+		/// <summary>
+		/// Starts the endurance regeneration
+		/// </summary>
+		public virtual void StartEnduranceRegeneration()
+		{
+			if (ObjectState != eObjectState.Active)
+				return;
+			lock (m_regenTimerLock)
+			{
+				if (m_enduRegenerationTimer == null)
+				{
+					m_enduRegenerationTimer = new ECSGameTimer(this);
+					m_enduRegenerationTimer.Callback = new ECSGameTimer.ECSTimerCallback(EnduranceRegenerationTimerCallback);
+				}
+				else if (m_enduRegenerationTimer.IsAlive)
+				{
+					return;
+				}
+				m_enduRegenerationTimer.Start(EnduranceRegenerationPeriod);
+			}
+		}
+		/// <summary>
+		/// Stop the health regeneration
+		/// </summary>
+		public virtual void StopHealthRegeneration()
+		{
+			lock (m_regenTimerLock)
+			{
+				if (m_healthRegenerationTimer == null)
+					return;
+				m_healthRegenerationTimer.Stop();
+				m_healthRegenerationTimer = null;
+			}
+		}
+		/// <summary>
+		/// Stop the power regeneration
+		/// </summary>
+		public virtual void StopPowerRegeneration()
+		{
+			lock (m_regenTimerLock)
+			{
+				if (m_powerRegenerationTimer == null)
+					return;
+				m_powerRegenerationTimer.Stop();
+				m_powerRegenerationTimer = null;
+			}
+		}
+		/// <summary>
+		/// Stop the endurance regeneration
+		/// </summary>
+		public virtual void StopEnduranceRegeneration()
+		{
+			lock (m_regenTimerLock)
+			{
+				if (m_enduRegenerationTimer == null)
+					return;
+				m_enduRegenerationTimer.Stop();
+				m_enduRegenerationTimer = null;
+			}
+		}
 
-        /// <summary>
-        /// Starts the endurance regeneration
-        /// </summary>
-        public virtual void StartEnduranceRegeneration()
-        {
-            if (ObjectState != eObjectState.Active)
-                return;
-            lock (m_regenTimerLock)
-            {
-                if (m_enduRegenerationTimer == null)
-                {
-                    m_enduRegenerationTimer = new ECSGameTimer(this);
-                    m_enduRegenerationTimer.Callback = new ECSGameTimer.ECSTimerCallback(EnduranceRegenerationTimerCallback);
-                }
-                else if (m_enduRegenerationTimer.IsAlive)
-                {
-                    return;
-                }
-                m_enduRegenerationTimer.Start(EnduranceRegenerationPeriod);
-            }
-        }
+		protected virtual int HealthRegenerationTimerCallback(ECSGameTimer callingTimer)
+		{
+			if (Health < MaxHealth)
+				ChangeHealth(this, eHealthChangeType.Regenerate, GetModified(eProperty.HealthRegenerationRate));
 
-        /// <summary>
-        /// Stop the health regeneration
-        /// </summary>
-        public virtual void StopHealthRegeneration()
-        {
-            lock (m_regenTimerLock)
-            {
-                if (m_healthRegenerationTimer == null)
-                    return;
-                m_healthRegenerationTimer.Stop();
-                m_healthRegenerationTimer = null;
-            }
-        }
+			bool atMaxHealth = Health >= MaxHealth;
 
-        /// <summary>
-        /// Stop the power regeneration
-        /// </summary>
-        public virtual void StopPowerRegeneration()
-        {
-            lock (m_regenTimerLock)
-            {
-                if (m_powerRegenerationTimer == null)
-                    return;
-                m_powerRegenerationTimer.Stop();
-                m_powerRegenerationTimer = null;
-            }
-        }
+			if (this is NecromancerPet necroPet && necroPet.Brain is IControlledBrain necroBrain)
+			{
+				GamePlayer player = necroBrain.GetPlayerOwner();
 
-        /// <summary>
-        /// Stop the endurance regeneration
-        /// </summary>
-        public virtual void StopEnduranceRegeneration()
-        {
-            lock (m_regenTimerLock)
-            {
-                if (m_enduRegenerationTimer == null)
-                    return;
-                m_enduRegenerationTimer.Stop();
-                m_enduRegenerationTimer = null;
-            }
-        }
+				if (player != null && DamageRvRMemory > 0)
+				{
+					if (atMaxHealth)
+						DamageRvRMemory = 0;
+					else
+						DamageRvRMemory -= Math.Max(GetModified(eProperty.HealthRegenerationRate), 0);
+				}
+			}
 
-        /// <summary>
-        /// Timer callback for the hp regeneration
-        /// </summary>
-        /// <param name="callingTimer">timer calling this function</param>
-        protected virtual int HealthRegenerationTimerCallback(ECSGameTimer callingTimer)
-        {
-            if (Health < MaxHealth)
-            {
-                ChangeHealth(this, eHealthChangeType.Regenerate, GetModified(eProperty.HealthRegenerationRate));
-            }
-
-            #region PVP DAMAGE
-
-            if (this is NecromancerPet)
-            {
-                GamePlayer this_necro_pl = null;
-
-                this_necro_pl = ((this as NecromancerPet).Brain as IControlledBrain).GetPlayerOwner();
-
-                if (DamageRvRMemory > 0 && this_necro_pl != null)
-                    DamageRvRMemory -= (long)Math.Max(GetModified(eProperty.HealthRegenerationRate), 0);
-            }
-
-            #endregion PVP DAMAGE
-
-            //If we are fully healed, we stop the timer
-            if (Health >= MaxHealth)
-            {
-                #region PVP DAMAGE
-
-                if (this is NecromancerPet)
-                {
-                    GamePlayer this_necro_pl = null;
-
-                    this_necro_pl = ((this as NecromancerPet).Brain as IControlledBrain).GetPlayerOwner();
-
-                    if (DamageRvRMemory > 0 && this_necro_pl != null)
-                        DamageRvRMemory = 0;
-                }
-
-                #endregion PVP DAMAGE
-
-                //We clean all damagedealers if we are fully healed,
-                //no special XP calculations need to be done
-                lock (m_xpGainers.SyncRoot)
-                {
-                    m_xpGainers.Clear();
-                }
+			if (atMaxHealth)
+			{
+				lock (m_xpGainers.SyncRoot)
+				{
+					m_xpGainers.Clear();
+				}
 
                 return 0;
             }
 
-            if (InCombat)
-            {
-                // in combat each tic is aprox 15 seconds - tolakram
-                return HealthRegenerationPeriod * 5;
-            }
+			if (InCombat)
+				return HealthRegenerationPeriod * 5;
 
-            //Heal at standard rate
-            return HealthRegenerationPeriod;
-        }
+			return HealthRegenerationPeriod;
+		}
 
-        /// <summary>
-        /// Callback for the power regenerationTimer
-        /// </summary>
-        /// <param name="selfRegenerationTimer">timer calling this function</param>
-        protected virtual int PowerRegenerationTimerCallback(ECSGameTimer selfRegenerationTimer)
-        {
-            if (this is GamePlayer &&
-                (((GamePlayer)this).CharacterClass.ID == (int)eCharacterClass.Vampiir ||
-                 (((GamePlayer)this).CharacterClass.ID > 59 && ((GamePlayer)this).CharacterClass.ID < 63))) // Maulers
-            {
-                double MinMana = MaxMana * 0.15;
-                double OnePercMana = Math.Ceiling(MaxMana * 0.01);
-                log.WarnFormat("current MaxMana is {0} and OnePercMana is {1}", MaxMana, OnePercMana);
+		protected virtual int PowerRegenerationTimerCallback(ECSGameTimer selfRegenerationTimer)
+		{
+			if (IsVampiirOrMauler())
+			{
+				double onePercMana = Math.Ceiling(MaxMana * 0.01);
 
-                if (!InCombat)
-                {
-                    /*if (ManaPercent < 15)
-					{
-						ChangeMana(this, eManaChangeType.Regenerate, (int)OnePercMana);
-						return 4000;
-					}
-					else if (ManaPercent > 15)
-					{*/
-                    ChangeMana(this, eManaChangeType.Regenerate, (int)(-OnePercMana));
-                    return 1000;
-                    //}
+				if (!InCombat)
+				{
+					ChangeMana(this, eManaChangeType.Regenerate, (int) -onePercMana);
+					return 1000;
+				}
+			}
+			else
+			{
+				int stackingBonus = 0;
 
-                    //return 0;
-                }
-            }
-            else
-            {
-                int stackingBonus = 0;
-                if (this is GamePlayer p) stackingBonus = p.PowerRegenStackingBonus;
-                if (Mana < MaxMana)
-                {
-                    ChangeMana(this, eManaChangeType.Regenerate, GetModified(eProperty.PowerRegenerationRate) + stackingBonus);
-                }
+				if (this is IGamePlayer p)
+					stackingBonus = p.PowerRegenStackingBonus;
 
-                //If we are full, we stop the timer
-                if (Mana >= MaxMana)
-                {
-                    selfRegenerationTimer.Stop();
-                }
-            }
+				if (Mana < MaxMana)
+					ChangeMana(this, eManaChangeType.Regenerate, GetModified(eProperty.PowerRegenerationRate) + stackingBonus);
+
+				if (Mana >= MaxMana)
+					return 0;
+			}
 
             int totalRegenPeriod = PowerRegenerationPeriod;
 
-            //If we were hit before we regenerated, we regenerate slower the next time
-            if (InCombat)
-            {
-                totalRegenPeriod = (int)(totalRegenPeriod * 2);//3.4);
-            }
+			if (InCombat)
+				totalRegenPeriod *= 2;
 
-            if (IsSitting)
-            {
-                totalRegenPeriod = (int)(totalRegenPeriod / 2);
-            }
+			if (IsSitting)
+				totalRegenPeriod /= 2;
 
-            #region Calculation : AtlasOF_Serenity
+			AtlasOF_SerenityAbility raSerenity = GetAbility<AtlasOF_SerenityAbility>();
 
-            // --- [START] --- AtlasOF_Serenity -----------------------------------------------------------
-            AtlasOF_SerenityAbility raSerenity = GetAbility<AtlasOF_SerenityAbility>();
-            if (raSerenity != null)
-            {
-                if (raSerenity.Level > 0)
-                {
-                    totalRegenPeriod = totalRegenPeriod - (raSerenity.GetAmountForLevel(raSerenity.Level));
-                }
-            }
-            // --- [START] --- AtlasOF_Serenity -----------------------------------------------------------
+			if (raSerenity != null && raSerenity.Level > 0)
+				totalRegenPeriod -= raSerenity.GetAmountForLevel(raSerenity.Level);
 
-            #endregion Calculation : AtlasOF_Serenity
+			return totalRegenPeriod;
 
-            //regen at standard rate
-            return totalRegenPeriod;
-        }
+			bool IsVampiirOrMauler()
+			{
+				if (this is not GamePlayer player)
+					return false;
 
-        /// <summary>
-        /// Callback for the endurance regenerationTimer
-        /// </summary>
-        /// <param name="selfRegenerationTimer">timer calling this function</param>
-        protected virtual int EnduranceRegenerationTimerCallback(ECSGameTimer selfRegenerationTimer)
-        {
-            if (Endurance < MaxEndurance)
-            {
-                int regen = GetModified(eProperty.EnduranceRegenerationRate);
-                if (regen > 0)
-                {
-                    ChangeEndurance(this, eEnduranceChangeType.Regenerate, regen);
-                }
-            }
-            if (Endurance >= MaxEndurance) return 0;
+				eCharacterClass characterClass = (eCharacterClass) player.CharacterClass.ID;
+				return characterClass is eCharacterClass.Vampiir || (characterClass >= eCharacterClass.MaulerAlb && characterClass <= eCharacterClass.MaulerHib);
+			}
+		}
 
-            return EnduranceRegenerationPeriod;
-        }
+		protected virtual int EnduranceRegenerationTimerCallback(ECSGameTimer selfRegenerationTimer)
+		{
+			if (Endurance < MaxEndurance)
+			{
+				int regen = GetModified(eProperty.EnduranceRegenerationRate);
 
-        #endregion Regeneration
+				if (regen > 0)
+					ChangeEndurance(this, eEnduranceChangeType.Regenerate, regen);
+			}
+
+			if (Endurance >= MaxEndurance)
+				return 0;
+
+			return EnduranceRegenerationPeriod;
+		}
+
+        #endregion
 
         #region Components
 
@@ -4218,30 +4035,34 @@ namespace DOL.GS
         /// </summary>
         private readonly Dictionary<KeyValuePair<int, Type>, KeyValuePair<long, Skill>> m_disabledSkills = new Dictionary<KeyValuePair<int, Type>, KeyValuePair<long, Skill>>();
 
-        /// <summary>
-        /// Gets the time left for disabling this skill in milliseconds
-        /// </summary>
-        /// <param name="skill"></param>
-        /// <returns>milliseconds left for disable</returns>
-        public virtual int GetSkillDisabledDuration(Skill skill)
-        {
-            lock ((m_disabledSkills as ICollection).SyncRoot)
-            {
-                KeyValuePair<int, Type> key = new KeyValuePair<int, Type>(skill.ID, skill.GetType());
-                if (m_disabledSkills.ContainsKey(key))
-                {
-                    long timeout = m_disabledSkills[key].Key;
-                    long left = timeout - GameLoop.GameLoopTime;
-                    if (left <= 0)
-                    {
-                        left = 0;
-                        m_disabledSkills.Remove(key);
-                    }
-                    return (int)left;
-                }
-            }
-            return 0;
-        }
+		/// <summary>
+		/// Gets the time left for disabling this skill in milliseconds
+		/// </summary>
+		/// <param name="skill"></param>
+		/// <returns>milliseconds left for disable</returns>
+		public virtual int GetSkillDisabledDuration(Skill skill)
+		{
+			lock ((m_disabledSkills as ICollection).SyncRoot)
+			{
+				KeyValuePair<int, Type> key = new(skill.ID, skill.GetType());
+
+				if (m_disabledSkills.TryGetValue(key, out KeyValuePair<long, Skill> value))
+				{
+					long timeout = value.Key;
+					long left = timeout - GameLoop.GameLoopTime;
+
+					if (left <= 0)
+					{
+						left = 0;
+						m_disabledSkills.Remove(key);
+					}
+
+					return (int) left;
+				}
+			}
+
+			return 0;
+		}
 
         /// <summary>
         /// Gets a copy of all disabled skills
@@ -4302,19 +4123,17 @@ namespace DOL.GS
             }
         }
 
-        /// <summary>
-        /// Removes Greyed out skills
-        /// </summary>
-        /// <param name="skill">the skill to remove</param>
-        public virtual void RemoveDisabledSkill(Skill skill)
-        {
-            lock ((m_disabledSkills as ICollection).SyncRoot)
-            {
-                KeyValuePair<int, Type> key = new KeyValuePair<int, Type>(skill.ID, skill.GetType());
-                if (m_disabledSkills.ContainsKey(key))
-                    m_disabledSkills.Remove(key);
-            }
-        }
+		/// <summary>
+		/// Removes Greyed out skills
+		/// </summary>
+		/// <param name="skill">the skill to remove</param>
+		public virtual void RemoveDisabledSkill(Skill skill)
+		{
+			lock ((m_disabledSkills as ICollection).SyncRoot)
+			{
+				m_disabledSkills.Remove(new(skill.ID, skill.GetType()));
+			}
+		}
 
         #region Broadcasting utils
 

@@ -1,46 +1,8 @@
-﻿/*
- * DAWN OF LIGHT - The first free open source DAoC server emulator
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
- *
- */
-
-//
-// This is the Storm Unique Object Generator. changed to instanciate GeneratedUniqueItem
-//
-// Original version by Etaew
-// Modified by Tolakram to add live like names and item models
-//
-// Released to the public on July 12th, 2010
-//
-// Please enjoy this generator and submit any fixes to the DOL project to benefit everyone.
-// - Tolakram
-//
-// Updating to instance object of GeneratedUniqueITem by Leodagan on Aug 2013.
-
-using System;
-using System.Collections;
+﻿using System;
 using System.Collections.Generic;
-using System.Reflection;
-using DOL.Events;
+using DOL.AI.Brain;
 using DOL.Database;
 using DOL.GS.PacketHandler;
-using DOL.AI.Brain;
-using DOL.GS.Scripts;
-using DOL.GS.Utils;
-using log4net;
 
 namespace DOL.GS
 {
@@ -86,7 +48,6 @@ namespace DOL.GS
                             item.IsTradable = false;
                             item.Price = 1;
                             //item.CapUtility(81);
-                            GameServer.Database.AddObject(item);
                             DbInventoryItem invitem = GameInventoryItem.Create<DbItemUnique>(item);
                             player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, invitem);
                             //player.Out.SendMessage("Generated: " + item.Name, eChatType.CT_System, eChatLoc.CL_SystemWindow);
@@ -136,7 +97,6 @@ namespace DOL.GS
                             }
 
                             item.AllowAdd = true;
-                            GameServer.Database.AddObject(item);
                             DbInventoryItem invitem = GameInventoryItem.Create<DbItemUnique>(item);
                             client.Player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, invitem);
                             client.Player.Out.SendMessage("Generated: " + item.Name, eChatType.CT_System,
@@ -202,8 +162,8 @@ namespace DOL.GS
             try
             {
                 GamePlayer player = killer as GamePlayer;
-                if (killer is GameNPC && ((GameNPC)killer).Brain is IControlledBrain)
-                    player = ((ControlledNpcBrain)((GameNPC)killer).Brain).GetPlayerOwner();
+                if (killer is GameNPC && ((GameNPC) killer).Brain is IControlledBrain)
+                    player = ((ControlledMobBrain) ((GameNPC) killer).Brain).GetPlayerOwner();
                 if (player == null)
                     return loot;
 
@@ -539,40 +499,38 @@ namespace DOL.GS
                 int shieldSize = GetShieldSizeFromClass(charClass);
                 for (int i = 0; i < shieldSize; i++)
                 {
-                    GeneratedUniqueItem item = null;
-                    item = new GeneratedUniqueItem(realm, charClass, (byte)(81), type, invSlot, (eDamageType)i + 1);
-                    item.AllowAdd = true;
-                    item.IsTradable = false;
-                    item.Price = 1;
-                    //item.CapUtility(81);
-                    GameServer.Database.AddObject(item);
-                    DbInventoryItem invitem = GameInventoryItem.Create<DbItemUnique>(item);
-                    player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, invitem);
-                }
-            }
-            else if (type == eObjectType.Flexible)
+					GeneratedUniqueItem item = null;
+					item = new GeneratedUniqueItem(realm, charClass, (byte)(81), type, invSlot, (eDamageType)i+1);
+					item.AllowAdd = true;
+					item.IsTradable = false;
+					item.Price = 1;
+					//item.CapUtility(81);
+					DbInventoryItem invitem = GameInventoryItem.Create<DbItemUnique>(item);
+					player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, invitem);
+				}
+				
+			}
+			else if (type == eObjectType.Flexible)
             {
-                //slash flex
-                GeneratedUniqueItem dmgTypeItem = new GeneratedUniqueItem(realm, charClass, (byte)(81), type, invSlot, eDamageType.Slash);
-                dmgTypeItem.AllowAdd = true;
-                dmgTypeItem.IsTradable = false;
-                dmgTypeItem.Price = 1;
-                //dmgTypeItem.CapUtility(81);
-                GameServer.Database.AddObject(dmgTypeItem);
-                DbInventoryItem tempItem = GameInventoryItem.Create<DbItemUnique>(dmgTypeItem);
-                player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, tempItem);
+				//slash flex
+				GeneratedUniqueItem dmgTypeItem = new GeneratedUniqueItem(realm, charClass, (byte)(81), type, invSlot, eDamageType.Slash);
+				dmgTypeItem.AllowAdd = true;
+				dmgTypeItem.IsTradable = false;
+				dmgTypeItem.Price = 1;
+				//dmgTypeItem.CapUtility(81);
+				DbInventoryItem tempItem = GameInventoryItem.Create<DbItemUnique>(dmgTypeItem);
+				player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, tempItem);
 
-                //crush flex
-                GeneratedUniqueItem dmgTypeItem2 = new GeneratedUniqueItem(realm, charClass, (byte)(81), type, invSlot, eDamageType.Crush);
-                dmgTypeItem2.AllowAdd = true;
-                dmgTypeItem2.IsTradable = false;
-                dmgTypeItem2.Price = 1;
-                //dmgTypeItem2.CapUtility(81);
-                GameServer.Database.AddObject(dmgTypeItem2);
-                DbInventoryItem tempItem2 = GameInventoryItem.Create<DbItemUnique>(dmgTypeItem2);
-                player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, tempItem2);
-            }
-            else if (type == eObjectType.TwoHandedWeapon || type == eObjectType.PolearmWeapon || type == eObjectType.LargeWeapons)
+				//crush flex
+				GeneratedUniqueItem dmgTypeItem2 = new GeneratedUniqueItem(realm, charClass, (byte)(81), type, invSlot, eDamageType.Crush);
+				dmgTypeItem2.AllowAdd = true;
+				dmgTypeItem2.IsTradable = false;
+				dmgTypeItem2.Price = 1;
+				//dmgTypeItem2.CapUtility(81);
+				DbInventoryItem tempItem2 = GameInventoryItem.Create<DbItemUnique>(dmgTypeItem2);
+				player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, tempItem2);
+			}
+			else if(type == eObjectType.TwoHandedWeapon || type == eObjectType.PolearmWeapon || type == eObjectType.LargeWeapons)
             {
                 int endDmgType = 4; //default for all 3, slash/crush/thrust
                 if (type == eObjectType.LargeWeapons || realm == eRealm.Midgard)
@@ -583,29 +541,26 @@ namespace DOL.GS
                 //one for each damage type
                 for (int i = 1; i < endDmgType; i++)
                 {
-                    GeneratedUniqueItem dmgTypeItem = new GeneratedUniqueItem(realm, charClass, (byte)(81), type, invSlot, (eDamageType)i);
-                    dmgTypeItem.AllowAdd = true;
-                    dmgTypeItem.IsTradable = false;
-                    dmgTypeItem.Price = 1;
-                    //dmgTypeItem.CapUtility(81);
-                    GameServer.Database.AddObject(dmgTypeItem);
-                    DbInventoryItem tempItem = GameInventoryItem.Create<DbItemUnique>(dmgTypeItem);
-                    player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, tempItem);
-                }
-            }
-            else
+					GeneratedUniqueItem dmgTypeItem = new GeneratedUniqueItem(realm, charClass, (byte)(81), type, invSlot, (eDamageType) i);
+					dmgTypeItem.AllowAdd = true;
+					dmgTypeItem.IsTradable = false;
+					dmgTypeItem.Price = 1;
+					//dmgTypeItem.CapUtility(81);
+					DbInventoryItem tempItem = GameInventoryItem.Create<DbItemUnique>(dmgTypeItem);
+					player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, tempItem);
+				}	
+			} else
             {
-                GeneratedUniqueItem item = null;
-                item = new GeneratedUniqueItem(realm, charClass, (byte)(81), type, invSlot);
-                item.AllowAdd = true;
-                item.IsTradable = false;
-                item.Price = 1;
-                //item.CapUtility(81);
-                GameServer.Database.AddObject(item);
-                DbInventoryItem invitem = GameInventoryItem.Create<DbItemUnique>(item);
-                player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, invitem);
-            }
-        }
+				GeneratedUniqueItem item = null;
+				item = new GeneratedUniqueItem(realm, charClass, (byte)(81), type, invSlot);
+				item.AllowAdd = true;
+				item.IsTradable = false;
+				item.Price = 1;
+				//item.CapUtility(81);
+				DbInventoryItem invitem = GameInventoryItem.Create<DbItemUnique>(item);
+				player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, invitem);
+			}	
+		}
 
         private static int GetShieldSizeFromClass(eCharacterClass charClass)
         {

@@ -12,7 +12,7 @@ namespace DOL.GS.Scripts
 		public ElroTheAncient()
 		{
 			TetherRange = 4500;
-			ScalingFactor = 55;
+			WeaponSkillScalingFactor = 55;
 		}
 		public override int GetResist(eDamageType damageType)
 		{
@@ -28,11 +28,7 @@ namespace DOL.GS.Scripts
 		{
 			return base.AttackDamage(weapon) * Strength / 100;
 		}
-		public override int AttackRange
-		{
-			get { return 350; }
-			set { }
-		}
+		public override int MeleeAttackRange => 350;
 		public override bool HasAbility(string keyName)
 		{
 			if (IsAlive && keyName == GS.Abilities.CCImmunity)

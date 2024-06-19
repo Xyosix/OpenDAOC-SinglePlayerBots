@@ -1266,19 +1266,8 @@ namespace DOL.GS.Scripts
             return true;
         }
 
-        public int Regen { get; set; }
-        public int Endchant { get; set; }
-        public long LastEnduTick { get; set; }
-        public int RegenRateAtChange { get; set; }
-        public int EnduDebuff { get; set; }
-        public double RegenBuff { get; set; }
-        public double RegenAfterTireless { get; set; }
-        public double NonCombatNonSprintRegen { get; set; }
-        public double CombatRegen { get; set; }
         public double SpecLock { get; set; }
         public long LastWorldUpdate { get; set; }
-
-        public ECSGameTimer EnduRegenTimer { get { return m_enduRegenerationTimer; } }
 
         private PlayerDeck _randomNumberDeck;
 
@@ -2593,92 +2582,6 @@ namespace DOL.GS.Scripts
 
         #endregion release/bind/pray
 
-        #region Name/LastName/GuildName/Model
-
-        /// <summary>
-        /// The lastname of this player
-        /// (delegate to PlayerCharacter)
-        /// </summary>
-        public virtual string LastName
-        {
-            get => DBCharacter != null ? DBCharacter.LastName : string.Empty;
-            set
-            {
-                if (DBCharacter == null)
-                    return;
-
-                DBCharacter.LastName = value;
-
-                // Update last name for all players if client is playing.
-                if (ObjectState == eObjectState.Active)
-                {
-                    //Out.SendUpdatePlayer();
-
-                    foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
-                    {
-                        player.Out.SendObjectRemove(this);
-                        //player.Out.SendPlayerCreate(this);
-                        player.Out.SendLivingEquipmentUpdate(this);
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the guildname of this player
-        /// (delegate to PlayerCharacter)
-        /// </summary>
-        //public override string GuildName
-        //{
-        //    get
-        //    {
-        //        if (m_guild == null)
-        //            return "";
-
-        //        return m_guild.Name;
-        //    }
-        //    set
-        //    { }
-        //}
-
-        /// <summary>
-        /// Gets or sets the name of the player
-        /// (delegate to PlayerCharacter)
-        /// </summary>
-        public override string Name
-        {
-            get => DBCharacter != null ? DBCharacter.Name : base.Name;
-            set
-            {
-                string oldname = base.Name;
-                base.Name = value;
-
-                if (DBCharacter != null)
-                    DBCharacter.Name = value;
-
-                if (oldname != value)
-                {
-                    // Update name for all players if client is playing.
-                    if (ObjectState == eObjectState.Active)
-                    {
-                        //  Out.SendUpdatePlayer();
-
-                        //  if (Group != null)
-                        //   Out.SendGroupWindowUpdate();
-
-                        foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
-                        {
-                            player.Out.SendObjectRemove(this);
-                            //player.Out.SendPlayerCreate(this);
-                            player.Out.SendLivingEquipmentUpdate(this);
-                        }
-                    }
-                }
-            }
-        }
-
-        #endregion Name/LastName/GuildName/Model
-
         #region Stats
 
         private int _totalConstitutionLostAtDeath = 0;
@@ -2882,64 +2785,41 @@ namespace DOL.GS.Scripts
             m_enduRegenerationTimer.Stop();
         }
 
-        /// <summary>
-        /// Override HealthRegenTimer because if we are not connected anymore
-        /// we DON'T regenerate health, even if we are not garbage collected yet!
-        /// </summary>
-        /// <param name="callingTimer">the timer</param>
-        /// <returns>the new time</returns>
         protected override int HealthRegenerationTimerCallback(ECSGameTimer callingTimer)
         {
-            // adjust timer based on Live testing of player
             if (Health < MaxHealth)
-            {
                 ChangeHealth(this, eHealthChangeType.Regenerate, GetModified(eProperty.HealthRegenerationRate));
-            }
 
-            #region PVP DAMAGE
+            bool atMaxHealth = Health >= MaxHealth;
 
             if (DamageRvRMemory > 0)
-                DamageRvRMemory -= (long)Math.Max(GetModified(eProperty.HealthRegenerationRate), 0);
-
-            #endregion PVP DAMAGE
-
-            //If we are fully healed, we stop the timer
-            if (Health >= MaxHealth)
             {
-                #region PVP DAMAGE
-
-                // Fully Regenerated, Set DamageRvRMemory to 0
-                if (DamageRvRMemory > 0)
+                if (atMaxHealth)
                     DamageRvRMemory = 0;
+                else
+                    DamageRvRMemory -= Math.Max(GetModified(eProperty.HealthRegenerationRate), 0);
+            }
 
-                #endregion PVP DAMAGE
-
-                //We clean all damagedealers if we are fully healed,
-                //no special XP calculations need to be done
+            if (atMaxHealth)
+            {
                 lock (m_xpGainers.SyncRoot)
                 {
                     m_xpGainers.Clear();
                 }
 
-                callingTimer.Stop();
+                return 0;
             }
 
             if (InCombat)
-            {
-                // in combat each tic is aprox 6 seconds - tolakram
                 return HealthRegenerationPeriod * 2;
-            }
 
             if (IsSitting)
-            {
                 return HealthRegenerationPeriod / 2;
-            }
 
-            //Heal at standard rate
             return HealthRegenerationPeriod;
         }
 
-        public int PowerRegenStackingBonus = 0;
+        public int PowerRegenStackingBonus { get; set; } = 0;
 
         /// <summary>
         /// Override PowerRegenTimer because if we are not connected anymore
@@ -2949,9 +2829,6 @@ namespace DOL.GS.Scripts
         /// <returns>the new time</returns>
         protected override int PowerRegenerationTimerCallback(ECSGameTimer selfRegenerationTimer)
         {
-            //if (Client.ClientState != GameClient.eClientState.Playing)
-            //    return PowerRegenerationPeriod;
-
             if (IsSitting)
             {
                 if (PowerRegenStackingBonus < 3)
@@ -2960,8 +2837,7 @@ namespace DOL.GS.Scripts
             else
                 PowerRegenStackingBonus = 0;
 
-            int interval = base.PowerRegenerationTimerCallback(selfRegenerationTimer);
-            return interval;
+            return base.PowerRegenerationTimerCallback(selfRegenerationTimer);
         }
 
         /// <summary>
@@ -2972,54 +2848,36 @@ namespace DOL.GS.Scripts
         /// <returns>the new time</returns>
         protected override int EnduranceRegenerationTimerCallback(ECSGameTimer selfRegenerationTimer)
         {
-            //if (Client.ClientState != GameClient.eClientState.Playing)
-            //    return EnduranceRegenerationPeriod;
-
-            LastEnduTick = GameLoop.GameLoopTime;
-
             bool sprinting = IsSprinting;
 
             if (Endurance < MaxEndurance || sprinting)
             {
-                int regen = GetModified(eProperty.EnduranceRegenerationRate);  //default is 1
-                int endchant = GetModified(eProperty.FatigueConsumption);      //Pull chant/buff value
-                var charge = EffectListService.GetEffectOnTarget(this, eEffect.Charge);
+                int regen = GetModified(eProperty.EnduranceRegenerationRate);
+                int endChant = GetModified(eProperty.FatigueConsumption);
+                ECSGameEffect charge = EffectListService.GetEffectOnTarget(this, eEffect.Charge);
+                int longWind = 5;
 
-                Regen = regen;
-                Endchant = endchant;
-
-                int longwind = 5;
                 if (sprinting && IsMoving)
                 {
                     if (charge is null)
                     {
-                        #region Calculation : AtlasOF_LongWind
-                        // --- [START] --- AtlasOF_EtherealBond --------------------------------------------------------
                         AtlasOF_LongWindAbility raLongWind = GetAbility<AtlasOF_LongWindAbility>();
+
                         if (raLongWind != null)
-                        {
-                            longwind -= (raLongWind.GetAmountForLevel(CalculateSkillLevel(raLongWind)) * 5 / 100);
-                        }
-                        // --- [START] --- AtlasOF_EtherealBond --------------------------------------------------------
-                        #endregion
+                            longWind -= raLongWind.GetAmountForLevel(CalculateSkillLevel(raLongWind)) * 5 / 100;
 
-                        regen -= longwind;
+                        regen -= longWind;
 
-                        if (endchant > 1) regen = (int)Math.Ceiling(regen * endchant * 0.01);
+                        if (endChant > 1)
+                            regen = (int)Math.Ceiling(regen * endChant * 0.01);
 
-                        if (Endurance + regen > MaxEndurance - longwind)
-                        {
-                            regen -= (Endurance + regen) - (MaxEndurance - longwind);
-                        }
+                        if (Endurance + regen > MaxEndurance - longWind)
+                            regen -= Endurance + regen - (MaxEndurance - longWind);
                     }
                 }
 
-                RegenRateAtChange = regen;
-
                 if (regen != 0)
-                {
                     ChangeEndurance(this, eEnduranceChangeType.Regenerate, regen);
-                }
             }
 
             if (sprinting)
@@ -3028,7 +2886,7 @@ namespace DOL.GS.Scripts
                     Sprint(false);
             }
             else if (Endurance >= MaxEndurance)
-                selfRegenerationTimer.Stop();
+                return 0;
 
             ushort rate = EnduranceRegenerationPeriod;
 
@@ -3607,17 +3465,16 @@ namespace DOL.GS.Scripts
 
             lock (((ICollection)m_specialization).SyncRoot)
             {
-                // search for existing key
-                if (!m_specialization.ContainsKey(skill.KeyName))
+                if (m_specialization.TryGetValue(skill.KeyName, out Specialization specialization))
                 {
-                    // Adding
-                    m_specialization.Add(skill.KeyName, skill);
+                    specialization.Level = skill.Level;
+                    return;
                 }
-                else
-                {
-                    // Updating
-                    m_specialization[skill.KeyName].Level = skill.Level;
-                }
+
+                m_specialization.Add(skill.KeyName, skill);
+
+                if (notify)
+                    Out.SendMessage(LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.AddSpecialisation.YouLearn", skill.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
             }
         }
 
@@ -3875,7 +3732,7 @@ namespace DOL.GS.Scripts
                 && ControlledBrain is IControlledBrain brain && brain.Body is GameSummonedPet pet
                 && pet.ControlledNpcList != null)
                 foreach (ABrain subBrain in pet.ControlledNpcList)
-                    if (subBrain != null && subBrain.Body is BDSubPet subPet && subPet.PetSpecLine == specLine.KeyName)
+                    if (subBrain != null && subBrain.Body is BdSubPet subPet && subPet.PetSpecLine == specLine.KeyName)
                         subPet.SortSpells();
 
             return specPoints;
@@ -3923,18 +3780,15 @@ namespace DOL.GS.Scripts
         /// <param name="name">the name of the specialization line</param>
         /// <param name="caseSensitive">false for case-insensitive compare</param>
         /// <returns>found specialization or null</returns>
-        public virtual Specialization GetSpecializationByName(string name, bool caseSensitive = false)
+        public virtual Specialization GetSpecializationByName(string name)
         {
             Specialization spec = null;
 
             lock (((ICollection)m_specialization).SyncRoot)
             {
-                if (caseSensitive && m_specialization.ContainsKey(name))
-                    spec = m_specialization[name];
-
                 foreach (KeyValuePair<string, Specialization> entry in m_specialization)
                 {
-                    if (entry.Key.ToLower().Equals(name.ToLower()))
+                    if (entry.Key.Equals(name, StringComparison.OrdinalIgnoreCase))
                     {
                         spec = entry.Value;
                         break;
@@ -4246,12 +4100,10 @@ namespace DOL.GS.Scripts
                         List<Skill> sps = new List<Skill>();
                         SpellLine key = spells.Keys.FirstOrDefault(el => el.ID == sl.ID);
 
-                        if (key != null && spells.ContainsKey(key))
+                        if (key != null && spells.TryGetValue(key, out List<Skill> spellsInLine))
                         {
-                            foreach (Skill sp in spells[key])
-                            {
+                            foreach (Skill sp in spellsInLine)
                                 sps.Add(sp);
-                            }
                         }
 
                         working.Add(new Tuple<SpellLine, List<Skill>>(sl, sps));
@@ -5763,7 +5615,7 @@ namespace DOL.GS.Scripts
 
             // Level up pets and subpets
             if (ServerProperties.Properties.PET_LEVELS_WITH_OWNER &&
-                ControlledBrain is ControlledNpcBrain brain && brain.Body is GameSummonedPet pet)
+                ControlledBrain is ControlledMobBrain brain && brain.Body is GameSummonedPet pet)
             {
                 if (pet.SetPetLevel())
                 {
@@ -6140,9 +5992,9 @@ namespace DOL.GS.Scripts
         {
             base.OnAttackedByEnemy(ad);
 
-            if (ControlledBrain != null && ControlledBrain is ControlledNpcBrain)
+            if (ControlledBrain != null && ControlledBrain is ControlledMobBrain)
             {
-                var brain = (ControlledNpcBrain)ControlledBrain;
+                var brain = (ControlledMobBrain)ControlledBrain;
                 brain.OnOwnerAttacked(ad);
             }
 
@@ -6151,17 +6003,14 @@ namespace DOL.GS.Scripts
                 case eAttackResult.HitStyle:
                 case eAttackResult.HitUnstyled:
                 {
-                    if (ad.Damage == -1)
+                    // If attacked by a non-damaging spell, we should not show damage numbers.
+                    // We need to check the damage on the spell here, not in the AD, since this could in theory be a damaging spell that had its damage modified to 0.
+                    if (ad.AttackType == eAttackType.Spell && ad.SpellHandler.Spell?.Damage == 0)
                         break;
 
-                    if (ad.AttackType == AttackData.eAttackType.Spell)
+                    if (IsStealthed && !effectListComponent.ContainsEffectForEffectType(eEffect.Vanish))
                     {
-                        // If attacked by a non-damaging spell, we should not show damage numbers.
-                        // We need to check the damage on the spell here, not in the AD, since this could in theory be a damaging spell that had its damage modified to 0.
-                        if (ad.SpellHandler.Spell.Damage == 0)
-                            break;
-
-                        if (ad.SpellHandler.Spell.SpellType != eSpellType.DamageOverTime && !effectListComponent.ContainsEffectForEffectType(eEffect.Vanish))
+                        if (ad.AttackType != eAttackType.Spell || ad.SpellHandler.Spell.SpellType != eSpellType.DamageOverTime)
                             Stealth(false);
                     }
 
@@ -6270,21 +6119,36 @@ namespace DOL.GS.Scripts
             if (Duel != null && !IsDuelPartner(source as GameLiving))
                 Duel.Stop();
 
-            #region PVP DAMAGE
-
-            if (source is IGamePlayer || (source is GameNPC npcSource && npcSource.Brain is IControlledBrain && (npcSource.Brain as IControlledBrain).GetLivingOwner() != null) || source is GameSiegeWeapon)
+            if (source is IGamePlayer || (source is GameNPC npc && npc.Brain is IControlledBrain brain && brain.GetLivingOwner() is IGamePlayer) || source is GameSiegeWeapon)
             {
                 if (Realm != source.Realm && source.Realm != 0)
                     DamageRvRMemory += damageAmount + criticalAmount;
             }
 
-            #endregion PVP DAMAGE
-
             base.TakeDamage(source, damageType, damageAmount, criticalAmount);
 
-            if (HasAbility("Defensive Combat Power Regeneration"))
-            {
+            if (HasAbility(GS.Abilities.DefensiveCombatPowerRegeneration))
                 Mana += (int)((damageAmount + criticalAmount) * 0.25);
+        }
+
+        public override int MeleeAttackRange
+        {
+            get
+            {
+                int range = 150; // Increase default melee range to 150 to help with higher latency players. Was 128.
+
+                if (TargetObject is GameKeepComponent)
+                    range += 150;
+                else
+                {
+                    if (TargetObject is GameLiving target && target.IsMoving)
+                        range += 32;
+
+                    if (IsMoving)
+                        range += 32;
+                }
+
+                return range;
             }
         }
 
@@ -6444,6 +6308,19 @@ namespace DOL.GS.Scripts
             }
         }
 
+        public override int WeaponSpecLevel(eObjectType objectType, int slotPosition)
+        {
+            // Use axe spec if left hand axe is not in the left hand slot.
+            if (objectType == eObjectType.LeftAxe && slotPosition != Slot.LEFTHAND)
+                return GameServer.ServerRules.GetObjectSpecLevel(this, eObjectType.Axe);
+
+            // Use left axe spec if axe is in the left hand slot.
+            if (slotPosition == Slot.LEFTHAND && objectType == eObjectType.Axe)
+                return GameServer.ServerRules.GetObjectSpecLevel(this, eObjectType.LeftAxe);
+
+            return GameServer.ServerRules.GetObjectSpecLevel(this, objectType);
+        }
+
         /// <summary>
         /// determines current weaponspeclevel
         /// </summary>
@@ -6451,27 +6328,8 @@ namespace DOL.GS.Scripts
         {
             if (weapon == null)
                 return 0;
-            // use axe spec if left hand axe is not in the left hand slot
-            if (weapon.Object_Type == (int)eObjectType.LeftAxe && weapon.SlotPosition != Slot.LEFTHAND)
-                return GetObjectSpecLevel(this, eObjectType.Axe);
-            // use left axe spec if axe is in the left hand slot
-            if (weapon.SlotPosition == Slot.LEFTHAND
-                && weapon.Object_Type == (int)eObjectType.Axe)
-                return GetObjectSpecLevel(this, eObjectType.LeftAxe);
-            return GetObjectSpecLevel(this, (eObjectType)weapon.Object_Type);
-        }
 
-        public int GetObjectSpecLevel(GameLiving living, eObjectType objectType)
-        {
-            int res = 0;
-
-            foreach (eObjectType obj in GetCompatibleObjectTypes(objectType))
-            {
-                int spec = living.GetModifiedSpecLevel(SkillBase.ObjectTypeToSpec(obj));
-                if (res < spec)
-                    res = spec;
-            }
-            return res;
+            return WeaponSpecLevel((eObjectType)weapon.Object_Type, weapon.SlotPosition);
         }
 
         protected Hashtable m_compatibleObjectTypes = null;
@@ -6591,7 +6449,7 @@ namespace DOL.GS.Scripts
 
             int classBaseWeaponSkill = weapon.SlotPosition == (int)eInventorySlot.DistanceWeapon ? CharacterClass.WeaponSkillRangedBase : CharacterClass.WeaponSkillBase;
             double weaponSkill = Level * classBaseWeaponSkill / 200.0 * (1 + 0.01 * GetWeaponStat(weapon) / 2) * Effectiveness;
-            return Math.Max(0, weaponSkill * GetModified(eProperty.WeaponSkill) * 0.01);
+            return Math.Max(1, weaponSkill * GetModified(eProperty.WeaponSkill) * 0.01);
         }
 
         /// <summary>
@@ -6896,7 +6754,7 @@ namespace DOL.GS.Scripts
 
             CharacterClass.Die(killer);
 
-            bool realmDeath = killer != null && killer.Realm != eRealm.None && killer.Realm != Realm;
+            bool killingBlowByEnemyRealm = killer != null && killer.Realm != eRealm.None && killer.Realm != Realm;
 
             TargetObject = null;
 
@@ -6913,7 +6771,7 @@ namespace DOL.GS.Scripts
 
             if (killer == null)
             {
-                if (realmDeath)
+                if (killingBlowByEnemyRealm)
                 {
                     playerMessage = LanguageMgr.GetTranslation("EN", "GamePlayer.Die.KilledLocation", GetName(0, true), location);
                     publicMessage = LanguageMgr.GetTranslation("EN", "GamePlayer.Die.KilledLocation", GetName(0, true), location);
@@ -6937,7 +6795,8 @@ namespace DOL.GS.Scripts
                 else
                 {
                     messageDistance = 0;
-                    if (realmDeath)
+
+                    if (killingBlowByEnemyRealm)
                     {
                         if (killer is MimicNPC mimic)
                         {
@@ -7258,97 +7117,6 @@ namespace DOL.GS.Scripts
             }
         }
 
-        /// <summary>
-		/// Starts the Respawn Timer
-		/// </summary>
-		public override void StartRespawn()
-        {
-            if (IsAlive)
-                return;
-
-            if (m_healthRegenerationTimer != null)
-            {
-                m_healthRegenerationTimer.Stop();
-                m_healthRegenerationTimer = null;
-            }
-
-            int respawnInt = RespawnInterval;
-            int minBound = (int)Math.Floor(respawnInt * .95);
-            int maxBound = (int)Math.Floor(respawnInt * 1.05);
-            respawnInt = Util.Random(minBound, maxBound);
-            if (respawnInt > 0)
-            {
-                lock (m_respawnTimerLock)
-                {
-                    if (m_respawnTimer == null)
-                    {
-                        m_respawnTimer = new ECSGameTimer(this);
-                        m_respawnTimer.Callback = new ECSGameTimer.ECSTimerCallback(RespawnTimerCallback);
-                    }
-                    else if (m_respawnTimer.IsAlive)
-                    {
-                        m_respawnTimer.Stop();
-                    }
-                    // register Mob as "respawning"
-                    CurrentRegion.MobsRespawning.TryAdd(this, respawnInt);
-
-                    m_respawnTimer.Start(respawnInt);
-                }
-            }
-        }
-
-        /// <summary>
-        /// The callback that will respawn this mob
-        /// </summary>
-        /// <param name="respawnTimer">the timer calling this callback</param>
-        /// <returns>the new interval</returns>
-        protected override int RespawnTimerCallback(ECSGameTimer respawnTimer)
-        {
-            CurrentRegion.MobsRespawning.TryRemove(this, out _);
-
-            lock (m_respawnTimerLock)
-            {
-                if (m_respawnTimer != null)
-                {
-                    m_respawnTimer.Stop();
-                    m_respawnTimer = null;
-                }
-            }
-
-            if (IsAlive || ObjectState == eObjectState.Active)
-                return 0;
-
-            /*
-			if (m_level >= 5 && m_databaseLevel < 60)
-			{
-				int minBound = (int) Math.Round(m_databaseLevel * .9);
-				int maxBound = (int) Math.Round(m_databaseLevel * 1.1);
-				Level = (byte)  Util.Random(minBound, maxBound);
-			}*/
-
-            SpawnTick = GameLoop.GameLoopTime;
-
-            // Heal this NPC and move it to the spawn location.
-            Health = MaxHealth;
-            Mana = MaxMana;
-            Endurance = MaxEndurance;
-
-            int origSpawnX = m_spawnPoint.X;
-            int origSpawnY = m_spawnPoint.Y;
-            X = m_spawnPoint.X;
-            Y = m_spawnPoint.Y;
-            Z = m_spawnPoint.Z;
-            Heading = m_spawnHeading;
-            AddToWorld();
-            m_spawnPoint.X = origSpawnX;
-            m_spawnPoint.Y = origSpawnY;
-
-            // Delay the first think tick a bit to prevent clients from sending positive LoS check
-            // when they shouldn't, which can happen right after 'SendNPCCreate' and makes mobs aggro through walls.
-            //Brain.LastThinkTick = GameLoop.GameLoopTime + 1250;
-            return 0;
-        }
-
         public override void EnemyKilled(GameLiving enemy)
         {
             if (Group != null)
@@ -7438,7 +7206,7 @@ namespace DOL.GS.Scripts
             if (partner == null)
                 return false;
 
-            if (living is GameNPC npc && npc.Brain is ControlledNpcBrain brain)
+            if (living is GameNPC npc && npc.Brain is ControlledMobBrain brain)
                 living = brain.GetLivingOwner();
 
             return partner == living;
@@ -8618,18 +8386,6 @@ namespace DOL.GS.Scripts
         }
 
         /// <summary>
-        /// Gets or sets the region of this player
-        /// </summary>
-        public override Region CurrentRegion
-        {
-            set
-            {
-                base.CurrentRegion = value;
-                if (DBCharacter != null) DBCharacter.Region = CurrentRegionID;
-            }
-        }
-
-        /// <summary>
         /// Holds the players max Z for fall damage
         /// </summary>
         private int m_maxLastZ;
@@ -8741,7 +8497,10 @@ namespace DOL.GS.Scripts
             get => m_diving;
             set
             {
-                if (!CurrentZone.IsDivingEnabled && value && Client.Account.PrivLevel == 1)
+                // Force the diving state instead of trusting the client.
+                value = IsUnderwater;
+
+                if (value && !CurrentZone.IsDivingEnabled && value && Client.Account.PrivLevel == 1)
                 {
                     Z += 1;
                     Out.SendPlayerJump(false);

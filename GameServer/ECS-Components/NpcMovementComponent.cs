@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.Numerics;
 using DOL.AI.Brain;
 using DOL.Database;
@@ -49,7 +48,7 @@ namespace DOL.GS
         public bool IsNearSpawn => Owner.IsWithinRadius(Owner.SpawnPoint, 25);
         public bool IsDestinationValid { get; private set; }
         public bool IsAtDestination => !IsDestinationValid || (Destination.X == Owner.X && Destination.Y == Owner.Y && Destination.Z == Owner.Z);
-        public bool CanRoam => Properties.ALLOW_ROAM && RoamingRange != 0 && string.IsNullOrWhiteSpace(PathID);
+        public bool CanRoam => Properties.ALLOW_ROAM && RoamingRange > 0 && string.IsNullOrWhiteSpace(PathID);
         public double HorizontalVelocityForClient { get; private set; }
         public Point3D PositionForClient => _needsBroadcastUpdate ? _positionForUpdatePackets : Owner;
         public bool HasActiveResetHeadingAction => _resetHeadingAction != null && _resetHeadingAction.IsAlive;
@@ -245,7 +244,7 @@ namespace DOL.GS
 
         public void ReturnToSpawnPoint(short speed)
         {
-            StopFollowing();
+            StopMoving();
             Owner.TargetObject = null;
             Owner.attackComponent.StopAttack();
             (Owner.Brain as StandardMobBrain)?.ClearAggroList();
@@ -260,6 +259,7 @@ namespace DOL.GS
 
         public void Roam(short speed)
         {
+            // Note that `CanRoam` returns false if `RoamingRange` is <= 0.
             int maxRoamingRadius = Owner.RoamingRange > 0 ? Owner.RoamingRange : Owner.CurrentRegion.IsDungeon ? 5 : 500;
 
             if (Owner.CurrentZone.IsPathingEnabled)
@@ -453,16 +453,41 @@ namespace DOL.GS
                 return Properties.GAMENPC_FOLLOWCHECK_TIME;
             }
 
-            if (FollowTarget.IsAlive == false || FollowTarget.ObjectState != eObjectState.Active || Owner.CurrentRegionID != FollowTarget.CurrentRegionID)
+            if (!FollowTarget.IsAlive || FollowTarget.ObjectState != eObjectState.Active || Owner.CurrentRegionID != FollowTarget.CurrentRegionID)
             {
                 StopFollowing();
                 return 0;
             }
 
-            float relativeX = FollowTarget.X - Owner.X;
-            float relativeY = FollowTarget.Y - Owner.Y;
-            float relativeZ = FollowTarget.Z - Owner.Z;
-            double distance = Math.Sqrt(relativeX * relativeX + relativeY * relativeY + relativeZ * relativeZ);
+            int targetX = FollowTarget.X;
+            int targetY = FollowTarget.Y;
+            int targetZ = FollowTarget.Z;
+            float relativeX;
+            float relativeY;
+            float relativeZ;
+            double distance;
+            bool isInFormation;
+
+            if (Owner.Brain is StandardMobBrain brain && Owner.FollowTarget.Realm == Owner.Realm)
+            {
+                if (brain.CheckFormation(ref targetX, ref targetY, ref targetZ))
+                    isInFormation = true;
+                else
+                    isInFormation = false;
+
+                relativeX = targetX - Owner.X;
+                relativeY = targetY - Owner.Y;
+                relativeZ = targetZ - Owner.Z;
+            }
+            else
+            {
+                relativeX = FollowTarget.X - Owner.X;
+                relativeY = FollowTarget.Y - Owner.Y;
+                relativeZ = FollowTarget.Z - Owner.Z;
+                isInFormation = false;
+            }
+
+            distance = Math.Sqrt(relativeX * relativeX + relativeY * relativeY + relativeZ * relativeZ);
 
             // If distance is greater then the max follow distance, stop following and return home.
             if (distance > FollowMaxDistance)
@@ -471,34 +496,23 @@ namespace DOL.GS
                 return 0;
             }
 
-            Point3D destination;
+            int minAllowedFollowDistance;
 
-            if (Owner.Brain is StandardMobBrain brain && Owner.FollowTarget.Realm == Owner.Realm)
+            if (isInFormation)
+                minAllowedFollowDistance = 0;
+            else
             {
-                // If we're part of a formation, we can get out early.
-                int newX = FollowTarget.X;
-                int newY = FollowTarget.Y;
-                int newZ = FollowTarget.Z;
+                minAllowedFollowDistance = Math.Max(FollowMinDistance, MIN_ALLOWED_FOLLOW_DISTANCE);
 
-                if (brain.CheckFormation(ref newX, ref newY, ref newZ))
+                if (distance <= minAllowedFollowDistance)
                 {
-                    destination = new(newX, newY, newZ);
-                    double followSpeed = Math.Max(Math.Min(MaxSpeed, Owner.GetDistance(destination) * FOLLOW_SPEED_SCALAR), 50);
-                    PathToInternal(destination, (short) followSpeed);
+                    TurnTo(FollowTarget);
+
+                    if (IsMoving)
+                        UpdateMovement(null, 0.0, 0);
+
                     return Properties.GAMENPC_FOLLOWCHECK_TIME;
                 }
-            }
-
-            int minAllowedFollowDistance = Math.Max(FollowMinDistance, MIN_ALLOWED_FOLLOW_DISTANCE);
-
-            if ((int) distance <= minAllowedFollowDistance)
-            {
-                TurnTo(FollowTarget);
-
-                if (IsMoving)
-                    UpdateMovement(null, 0.0, 0);
-
-                return Properties.GAMENPC_FOLLOWCHECK_TIME;
             }
 
             // Use a slightly lower follow distance for destination calculation. This helps with heading at low speed.
@@ -506,7 +520,7 @@ namespace DOL.GS
             relativeX = (float) (relativeX / distance * minAllowedFollowDistance);
             relativeY = (float) (relativeY / distance * minAllowedFollowDistance);
             relativeZ = (float) (relativeZ / distance * minAllowedFollowDistance);
-            destination = new((int) (FollowTarget.X - relativeX), (int) (FollowTarget.Y - relativeY), (int) (FollowTarget.Z - relativeZ));
+            Point3D destination = new((int) (targetX - relativeX), (int) (targetY - relativeY), (int) (targetZ - relativeZ));
             short speed = (short) ((distance - minAllowedFollowDistance) * (1000.0 / Properties.GAMENPC_FOLLOWCHECK_TIME));
             PathToInternal(destination, Math.Min(MaxSpeed, speed));
             return Properties.GAMENPC_FOLLOWCHECK_TIME;
@@ -663,12 +677,7 @@ namespace DOL.GS
 
             if (destination == null || distanceToTarget < 1)
             {
-                // This appears to be unreliable if we don't forcefully snap the NPC's position to its destination in `OnArrival`.
-                // X, Y, Z are supposed to return the destination. It's possible early ticks prevent that.
-                // We could also simply broadcast, but this would be wasteful.
-                if (!IsAtDestination)
-                    _needsBroadcastUpdate = true;
-
+                _needsBroadcastUpdate = true;
                 IsDestinationValid = false;
             }
             else
@@ -768,13 +777,13 @@ namespace DOL.GS
         private enum MovementState
         {
             NONE = 0,
-            REQUEST = 1,      // Was requested to move.
-            WALK_TO = 2,      // Is moving and has a destination.
-            FOLLOW = 4,       // Is following an object.
-            ON_PATH = 8,      // Is following a path / is patrolling.
-            AT_WAYPOINT = 16, // Is waiting at a waypoint.
-            PATHING = 32,     // Is moving using PathCalculator.
-            TURN_TO = 64      // Is facing a direction for a certain duration.
+            REQUEST = 1 << 1,      // Was requested to move.
+            WALK_TO = 1 << 2,      // Is moving and has a destination.
+            FOLLOW = 1 << 3,       // Is following an object.
+            ON_PATH = 1 << 4,      // Is following a path / is patrolling.
+            AT_WAYPOINT = 1 << 5,  // Is waiting at a waypoint.
+            PATHING = 1 << 6,      // Is moving using PathCalculator.
+            TURN_TO = 1 << 7       // Is facing a direction for a certain duration.
         }
     }
 }

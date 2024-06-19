@@ -13,18 +13,16 @@ namespace DOL.AI.Brain
     /// A brain for the necromancer pets.
     /// </summary>
     /// <author>Aredhel</author>
-    public class NecromancerPetBrain : ControlledNpcBrain
+    public class NecromancerPetBrain : ControlledMobBrain
     {
         public NecromancerPetBrain(GameLiving owner) : base(owner)
         {
             FSM.ClearStates();
-
-            FSM.Add(new NecromancerPetState_WAKING_UP(this));
+            FSM.Add(new ControlledMobState_WAKING_UP(this));
             FSM.Add(new NecromancerPetState_DEFENSIVE(this));
             FSM.Add(new NecromancerPetState_AGGRO(this));
             FSM.Add(new NecromancerPetState_PASSIVE(this));
             FSM.Add(new StandardMobState_DEAD(this));
-
             FSM.SetCurrentState(eFSMStateType.WAKING_UP);
         }
 

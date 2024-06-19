@@ -2,26 +2,26 @@
 
 namespace DOL.AI.Brain
 {
-    public class ControlledNPCState_WAKING_UP : StandardMobState_WAKING_UP
+    public class ControlledMobState_WAKING_UP : StandardMobState_WAKING_UP
     {
-        public ControlledNPCState_WAKING_UP(ControlledNpcBrain brain) : base(brain)
+        private bool _abilitiesChecked;
+
+        public ControlledMobState_WAKING_UP(ControlledMobBrain brain) : base(brain)
         {
             StateType = eFSMStateType.WAKING_UP;
         }
 
         public override void Think()
         {
-            ControlledNpcBrain brain = _brain as ControlledNpcBrain;
+            ControlledMobBrain brain = _brain as ControlledMobBrain;
 
-            // Load abilities on first Think() cycle.
-            if (!brain.checkAbility)
+            if (!_abilitiesChecked)
             {
                 brain.CheckAbilities();
                 brain.Body.SortSpells();
-                brain.checkAbility = true;
+                _abilitiesChecked = true;
             }
 
-            // Determine state we should be in.
             if (brain.AggressionState == eAggressionState.Aggressive)
                 brain.FSM.SetCurrentState(eFSMStateType.AGGRO);
             else if (brain.AggressionState == eAggressionState.Defensive)
@@ -29,27 +29,31 @@ namespace DOL.AI.Brain
             else if (brain.AggressionState == eAggressionState.Passive)
                 brain.FSM.SetCurrentState(eFSMStateType.PASSIVE);
 
-            // Put this here so no delay after entering initial state before next Think().
             brain.Think();
         }
     }
 
-    public class ControlledNPCState_DEFENSIVE : StandardMobState_IDLE
+    public class ControlledMobState_DEFENSIVE : StandardMobState_IDLE
     {
-        public ControlledNPCState_DEFENSIVE(ControlledNpcBrain brain) : base(brain)
+        public ControlledMobState_DEFENSIVE(ControlledMobBrain brain) : base(brain)
         {
             StateType = eFSMStateType.IDLE;
         }
 
+        public override void Enter()
+        {
+            // Don't call base since it makes pets stop moving.
+        }
+
         public override void Think()
         {
-            ControlledNpcBrain brain = _brain as ControlledNpcBrain;
+            ControlledMobBrain brain = _brain as ControlledMobBrain;
             GamePlayer playerOwner = brain.GetPlayerOwner();
 
             if (playerOwner != null)
             {
                 // See if the pet is too far away, if so release it!
-                if (brain.IsMainPet && !brain.Body.IsWithinRadius(brain.Owner, ControlledNpcBrain.MAX_OWNER_FOLLOW_DIST))
+                if (brain.IsMainPet && !brain.Body.IsWithinRadius(brain.Owner, ControlledMobBrain.MAX_OWNER_FOLLOW_DIST))
                     playerOwner.CommandNpcRelease();
             }
 
@@ -68,9 +72,9 @@ namespace DOL.AI.Brain
         }
     }
 
-    public class ControlledNPCState_AGGRO : StandardMobState_AGGRO
+    public class ControlledMobState_AGGRO : StandardMobState_AGGRO
     {
-        public ControlledNPCState_AGGRO(ControlledNpcBrain brain) : base(brain)
+        public ControlledMobState_AGGRO(ControlledMobBrain brain) : base(brain)
         {
             StateType = eFSMStateType.AGGRO;
         }
@@ -87,13 +91,13 @@ namespace DOL.AI.Brain
 
         public override void Think()
         {
-            ControlledNpcBrain brain = _brain as ControlledNpcBrain;
+            ControlledMobBrain brain = _brain as ControlledMobBrain;
             GamePlayer playerOwner = brain.GetPlayerOwner();
 
             if (playerOwner != null)
             {
                 // See if the pet is too far away, if so release it!
-                if (brain.IsMainPet && !brain.Body.IsWithinRadius(brain.Owner, ControlledNpcBrain.MAX_OWNER_FOLLOW_DIST))
+                if (brain.IsMainPet && !brain.Body.IsWithinRadius(brain.Owner, ControlledMobBrain.MAX_OWNER_FOLLOW_DIST))
                     playerOwner.CommandNpcRelease();
             }
 
@@ -141,9 +145,9 @@ namespace DOL.AI.Brain
         }
     }
 
-    public class ControlledNPCState_PASSIVE : StandardMobState
+    public class ControlledMobState_PASSIVE : StandardMobState
     {
-        public ControlledNPCState_PASSIVE(ControlledNpcBrain brain) : base(brain)
+        public ControlledMobState_PASSIVE(ControlledMobBrain brain) : base(brain)
         {
             StateType = eFSMStateType.PASSIVE;
         }
@@ -158,13 +162,13 @@ namespace DOL.AI.Brain
 
         public override void Think()
         {
-            ControlledNpcBrain brain = _brain as ControlledNpcBrain;
+            ControlledMobBrain brain = _brain as ControlledMobBrain;
             GamePlayer playerOwner = brain.GetPlayerOwner();
 
             if (playerOwner != null)
             {
                 // See if the pet is too far away, if so release it!
-                if (brain.IsMainPet && !brain.Body.IsWithinRadius(brain.Owner, ControlledNpcBrain.MAX_OWNER_FOLLOW_DIST))
+                if (brain.IsMainPet && !brain.Body.IsWithinRadius(brain.Owner, ControlledMobBrain.MAX_OWNER_FOLLOW_DIST))
                     playerOwner.CommandNpcRelease();
             }
 

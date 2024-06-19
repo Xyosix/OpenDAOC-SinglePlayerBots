@@ -8,13 +8,14 @@ namespace DOL.GS
 {
     public class GameEpicBoss : GameNPC, IGameEpicNpc
     {
+        public override double MaxHealthScalingFactor => 1.5;
         public double DefaultArmorFactorScalingFactor => 1.6;
         public int ArmorFactorScalingFactorPetCap => 24;
         public double ArmorFactorScalingFactor { get; set; }
 
         public GameEpicBoss() : base()
         {
-            ScalingFactor = 80;
+            WeaponSkillScalingFactor = 80;
             ArmorFactorScalingFactor = DefaultArmorFactorScalingFactor;
             OrbsReward = Properties.EPICBOSS_ORBS;
         }
@@ -147,19 +148,13 @@ namespace DOL.AI.Brain
                 Body.Y = Body.SpawnPoint.Y;
                 Body.Z = Body.SpawnPoint.Z;
                 Body.Heading = Body.SpawnHeading;
-                //remove effects: dots and bleeds
-                if (Body.effectListComponent.ContainsEffectForEffectType(eEffect.DamageOverTime) && Body.IsAlive)
+
+                foreach (ECSGameEffect effect in Body.effectListComponent.GetAllEffects())
                 {
-                    var effect = EffectListService.GetEffectOnTarget(Body, eEffect.DamageOverTime);
-                    if (effect != null)
-                        EffectService.RequestImmediateCancelEffect(effect);//remove dot effect
+                    if (effect.SpellHandler.Spell.IsHarmful)
+                        EffectService.RequestImmediateCancelEffect(effect);
                 }
-                if (Body.effectListComponent.ContainsEffectForEffectType(eEffect.Bleed) && Body.IsAlive)
-                {
-                    var effect2 = EffectListService.GetEffectOnTarget(Body, eEffect.Bleed);
-                    if (effect2 != null)
-                        EffectService.RequestImmediateCancelEffect(effect2);//remove dot effect
-                }
+
                 ClearAggroList();// clear aggro list
                 Port_To_Spawn = true;
             }

@@ -241,7 +241,7 @@ namespace DOL.AI.Brain
                 if (Properties.CHECK_LOS_BEFORE_AGGRO)
                 {
                     // Check LoS if either the target or the current mob is a pet
-                    if (npc.Brain is ControlledNpcBrain theirControlledNpcBrain && theirControlledNpcBrain.GetPlayerOwner() is GamePlayer theirOwner)
+                    if (npc.Brain is ControlledMobBrain theirControlledMobBrain && theirControlledMobBrain.GetPlayerOwner() is GamePlayer theirOwner)
                     {
                         theirOwner.Out.SendCheckLos(Body, npc, new CheckLosResponse(LosCheckForAggroCallback));
                         continue;
@@ -369,7 +369,7 @@ namespace DOL.AI.Brain
                             {
                                 if (Body.TargetObject is GameLiving target)
                                 {
-                                    if (Body.IsWithinRadius(Body.TargetObject, Body.AttackRange) &&
+                                    if (Body.IsWithinRadius(Body.TargetObject, Body.MeleeAttackRange) &&
                                         GameServer.ServerRules.IsAllowedToAttack(Body, target, true))
                                     {
                                         new BerserkECSGameEffect(new ECSGameEffectInitParams(Body, 20000, 1));
@@ -384,7 +384,7 @@ namespace DOL.AI.Brain
                             {
                                 if (Body.TargetObject is GameLiving target)
                                 {
-                                    if (Body.IsWithinRadius(Body.TargetObject, Body.AttackRange) &&
+                                    if (Body.IsWithinRadius(Body.TargetObject, Body.MeleeAttackRange) &&
                                         GameServer.ServerRules.IsAllowedToAttack(Body, target, true) || Body.HealthPercent < 75)
                                     {
                                         new StagECSGameEffect(new ECSGameEffectInitParams(Body, 30000, 1), ab.Level);
@@ -399,7 +399,7 @@ namespace DOL.AI.Brain
                             {
                                 if (Body.TargetObject is GameLiving target)
                                 {
-                                    if (Body.IsWithinRadius(Body.TargetObject, Body.AttackRange) &&
+                                    if (Body.IsWithinRadius(Body.TargetObject, Body.MeleeAttackRange) &&
                                         GameServer.ServerRules.IsAllowedToAttack(Body, target, true))
                                     {
                                         new TripleWieldECSGameEffect(new ECSGameEffectInitParams(Body, 30000, 1));
@@ -419,7 +419,7 @@ namespace DOL.AI.Brain
                                     if (gamePlayer != null && gamePlayer.CharacterClass.ClassType == eClassType.ListCaster)
                                         break;
 
-                                    if (Body.IsWithinRadius(Body.TargetObject, Body.AttackRange) &&
+                                    if (Body.IsWithinRadius(Body.TargetObject, Body.MeleeAttackRange) &&
                                         GameServer.ServerRules.IsAllowedToAttack(Body, target, true))
                                     {
                                         new DirtyTricksECSGameEffect(new ECSGameEffectInitParams(Body, 30000, 1));
@@ -1130,7 +1130,7 @@ namespace DOL.AI.Brain
             // It's built on demand, when `GetOrderedAggroList` is called.
             OrderedAggroList.Clear();
 
-            int attackRange = Body.AttackRange;
+            int attackRange = Body.MeleeAttackRange;
             GameLiving highestThreat = null;
             long highestEffectiveAggro = -1; // Assumes that negative aggro amounts aren't allowed in the list.
             long highestEffectiveAggroInAttackRange = -1; // Assumes that negative aggro amounts aren't allowed in the list.
@@ -1252,7 +1252,7 @@ namespace DOL.AI.Brain
         /// </summary>
         protected virtual void ConvertDamageToAggroAmount(GameLiving attacker, int damage)
         {
-            if (attacker is GameNPC NpcAttacker && NpcAttacker.Brain is ControlledNpcBrain controlledBrain)
+            if (attacker is GameNPC NpcAttacker && NpcAttacker.Brain is ControlledMobBrain controlledBrain)
             {
                 damage = controlledBrain.ModifyDamageWithTaunt(damage);
 
@@ -2086,7 +2086,7 @@ namespace DOL.AI.Brain
                 if (spell.CastTime > 0)
                     Body.StopFollowing();
                 else if (Body.FollowTarget != Body.TargetObject)
-                    Body.Follow(Body.TargetObject, spell.Range - 10, GameNPC.STICK_MAXIMUM_RANGE);
+                    Body.Follow(Body.TargetObject, spell.Range - 10, Body.StickMaximumRange);
             }
 
             return casted;
@@ -2153,7 +2153,7 @@ namespace DOL.AI.Brain
 
                 if (spell.SpellType == eSpellType.CombatSpeedBuff)
                 {
-                    if (Body.TargetObject != null && !Body.IsWithinRadius(Body.TargetObject, Body.AttackRange))
+                    if (Body.TargetObject != null && !Body.IsWithinRadius(Body.TargetObject, Body.MeleeAttackRange))
                         break;
                 }
 
