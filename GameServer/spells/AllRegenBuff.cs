@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using DOL.GS.Effects;
 using DOL.GS.PacketHandler;
 
 namespace DOL.GS.Spells
@@ -20,15 +18,14 @@ namespace DOL.GS.Spells
         {
 			SpellLine potionEffectLine = SkillBase.GetSpellLine(GlobalSpellsLines.Potions_Effects);
 
-			Spell pomSpell = SkillBase.FindSpell(pomID, potionEffectLine);
+			Spell pomSpell = SkillBase.GetSpellByID(pomID);
 			SpellHandler pomSpellHandler = ScriptMgr.CreateSpellHandler(target, pomSpell, potionEffectLine) as SpellHandler;
 
-			Spell endSpell = SkillBase.FindSpell(endID, potionEffectLine);
+			Spell endSpell = SkillBase.GetSpellByID(endID);
 			SpellHandler endSpellHandler = ScriptMgr.CreateSpellHandler(target, endSpell, potionEffectLine) as SpellHandler;
 
-			Spell healSpell = SkillBase.FindSpell(healID, potionEffectLine);
+			Spell healSpell = SkillBase.GetSpellByID(healID);
 			SpellHandler healthConSpellHandler = ScriptMgr.CreateSpellHandler(target, healSpell, potionEffectLine) as SpellHandler;
-			
 
 			pomSpellHandler.StartSpell(target);
 			endSpellHandler.StartSpell(target);
@@ -36,9 +33,9 @@ namespace DOL.GS.Spells
 
 			return true;
 		}
-        public override eProperty Property1 => eProperty.PowerRegenerationRate;
-        public override eProperty Property2 => eProperty.EnduranceRegenerationRate;
-        public override eProperty Property3 => eProperty.HealthRegenerationRate;
+        public override eProperty Property1 => eProperty.PowerRegenerationAmount;
+        public override eProperty Property2 => eProperty.EnduranceRegenerationAmount;
+        public override eProperty Property3 => eProperty.HealthRegenerationAmount;
 
 
 
@@ -84,13 +81,13 @@ namespace DOL.GS.Spells
 			target = Caster;
 			SpellLine potionEffectLine = SkillBase.GetSpellLine(GlobalSpellsLines.Potions_Effects);
 
-			Spell pomSpell = SkillBase.FindSpell(pomID, potionEffectLine);
+			Spell pomSpell = SkillBase.GetSpellByID(pomID);
 			SpellHandler pomSpellHandler = ScriptMgr.CreateSpellHandler(target, pomSpell, potionEffectLine) as SpellHandler;
 
-			Spell endSpell = SkillBase.FindSpell(endID, potionEffectLine);
+			Spell endSpell = SkillBase.GetSpellByID(endID);
 			SpellHandler endSpellHandler = ScriptMgr.CreateSpellHandler(target, endSpell, potionEffectLine) as SpellHandler;
 
-			Spell healSpell = SkillBase.FindSpell(healID, potionEffectLine);
+			Spell healSpell = SkillBase.GetSpellByID(healID);
 			SpellHandler healthConSpellHandler = ScriptMgr.CreateSpellHandler(target, healSpell, potionEffectLine) as SpellHandler;
 
 			pomSpellHandler.StartSpell(target);
@@ -105,9 +102,9 @@ namespace DOL.GS.Spells
 
 			return true;
 		}
-		public override eProperty Property1 => eProperty.PowerRegenerationRate;
-		public override eProperty Property2 => eProperty.EnduranceRegenerationRate;
-		public override eProperty Property3 => eProperty.HealthRegenerationRate;
+		public override eProperty Property1 => eProperty.PowerRegenerationAmount;
+		public override eProperty Property2 => eProperty.EnduranceRegenerationAmount;
+		public override eProperty Property3 => eProperty.HealthRegenerationAmount;
 
 
 

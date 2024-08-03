@@ -3,6 +3,7 @@ using DOL.AI.Brain;
 using DOL.Database;
 using DOL.GS;
 using DOL.GS.PacketHandler;
+using DOL.GS.Scripts;
 
 namespace DOL.Tests.Unit.Gameserver
 {
@@ -133,6 +134,7 @@ namespace DOL.Tests.Unit.Gameserver
         public GameLiving GetLivingOwner() { return null; }
         public GameNPC GetNPCOwner() { return null; }
         public GamePlayer GetPlayerOwner() { return null; }
+        public IGamePlayer GetIPlayerOwner() { return null; }
         public void Goto(GameObject target) { }
         public void SetAggressionState(eAggressionState state) { }
         public void Stay() { }

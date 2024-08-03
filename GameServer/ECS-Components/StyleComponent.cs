@@ -120,7 +120,7 @@ namespace DOL.GS
             if (NextCombatStyle == null)
                 return null;
 
-            AttackData lastAttackData = _owner.TempProperties.GetProperty<AttackData>(GameLiving.LAST_ATTACK_DATA, null);
+            AttackData lastAttackData = _owner.attackComponent.attackAction.LastAttackData;
             DbInventoryItem weapon = NextCombatStyle.WeaponTypeRequirement == (int)eObjectType.Shield ? _owner.Inventory.GetItem(eInventorySlot.LeftHandWeapon) : _owner.ActiveWeapon;
 
             //if they've cached a style and then respecced to no longer have access, remove it
@@ -164,7 +164,7 @@ namespace DOL.GS
                     return null;
             }
 
-            AttackData lastAttackData = p.TempProperties.GetProperty<AttackData>(GameLiving.LAST_ATTACK_DATA, null);
+            AttackData lastAttackData = p.attackComponent.attackAction.LastAttackData;
 
             if (p.StylesChain != null && p.StylesChain.Count > 0)
                 foreach (Style s in p.StylesChain)

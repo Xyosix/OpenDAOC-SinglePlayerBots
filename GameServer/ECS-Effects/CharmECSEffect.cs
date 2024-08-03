@@ -2,6 +2,7 @@
 using DOL.AI.Brain;
 using DOL.Events;
 using DOL.GS.PacketHandler;
+using DOL.GS.Scripts;
 using DOL.GS.Spells;
 using DOL.Language;
 
@@ -14,6 +15,9 @@ namespace DOL.GS
         public override void OnStartEffect()
         {
             if (SpellHandler.Caster is not GamePlayer casterPlayer || Owner is not GameNPC charmMob)
+                return;
+
+            if (charmMob is MimicNPC)
                 return;
 
             CharmSpellHandler charmSpellHandler = SpellHandler as CharmSpellHandler;

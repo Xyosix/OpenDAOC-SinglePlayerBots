@@ -30,7 +30,7 @@ namespace DOL.GS
         {
             if (Owner != null && Owner is IGamePlayer gamePlayer)
             {
-                int regen = gamePlayer.GetModified(eProperty.EnduranceRegenerationRate);
+                int regen = gamePlayer.GetModified(eProperty.EnduranceRegenerationAmount);
                 var enduranceChant = gamePlayer.GetModified(eProperty.FatigueConsumption);
                 var cost = -5 + regen;
 

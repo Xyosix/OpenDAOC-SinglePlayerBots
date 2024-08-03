@@ -3,18 +3,16 @@ using System.Linq;
 using DOL.Database;
 using DOL.GS.Scripts;
 using DOL.GS.Styles;
-using static DOL.GS.GameLiving;
 using static DOL.GS.GameObject;
 
 namespace DOL.GS
 {
-    public abstract class AttackAction
+    public class AttackAction
     {
         // Next tick interval for when the current tick doesn't result in an attack.
         protected const int TICK_INTERVAL_FOR_NON_ATTACK = 100;
         private const int MINIMUM_MELEE_DELAY_AFTER_RANGED_ATTACK = 750;
 
-        protected AttackData _lastAttackData;
         protected DbInventoryItem _weapon;
         protected DbInventoryItem _leftWeapon;
         protected Style _combatStyle;
@@ -29,6 +27,7 @@ namespace DOL.GS
 
         // Set to current time when a round doesn't result in an attack. Used to prevent combat log spam and kept until reset in AttackComponent.SendAttackingCombatMessages().
         public long RoundWithNoAttackTime { get; set; }
+        public AttackData LastAttackData { get; set; }
         public long NextTick => _owner.ActiveWeaponSlot != eActiveWeaponSlot.Distance ? _nextMeleeTick : _nextRangedTick;
         protected AttackComponent AttackComponent => _owner.attackComponent;
         protected StyleComponent StyleComponent => _owner.styleComponent;
@@ -40,30 +39,35 @@ namespace DOL.GS
             _nextRangedTick = GameLoop.GameLoopTime;
         }
 
-        public static AttackAction Create(GameLiving gameLiving)
+        public static AttackAction Create(GameLiving living)
         {
-            if (gameLiving is MimicNPC mimicNPC)
+            if (living is MimicNPC mimicNPC)
                 return new MimicAttackAction(mimicNPC);
-            if (gameLiving is GameNPC gameNpc)
-                return new NpcAttackAction(gameNpc);
-            else if (gameLiving is GamePlayer gamePlayer)
-                return new PlayerAttackAction(gamePlayer);
-
-            return null;
+            else if (living is GameNPC npc)
+                return new NpcAttackAction(npc);
+            else if (living is GamePlayer player)
+                return new PlayerAttackAction(player);
+            else
+                return new AttackAction(living);
         }
 
-        public void Tick()
+        public bool Tick()
         {
             if (!ShouldTick())
-                return;
+                return true;
 
             if (!CanPerformAction())
             {
                 _interval = TICK_INTERVAL_FOR_NON_ATTACK;
-                return;
+                return true;
             }
 
-            _lastAttackData = _owner.TempProperties.GetProperty<AttackData>(LAST_ATTACK_DATA, null);
+            if (!AttackComponent.AttackState)
+            {
+                CleanUp();
+                return false;
+            }
+
             _weapon = _owner.ActiveWeapon;
             _leftWeapon = _owner.Inventory?.GetItem(eInventorySlot.LeftHandWeapon);
             _effectiveness = _owner.Effectiveness;
@@ -72,6 +76,8 @@ namespace DOL.GS
                 TickMeleeAttack();
             else
                 TickRangedAttack();
+
+            return true;
         }
 
         private void TickMeleeAttack()
@@ -134,7 +140,7 @@ namespace DOL.GS
 
         private bool ShouldTick()
         {
-            if (!AttackComponent.AttackState || _owner.ObjectState != eObjectState.Active)
+            if (_owner.ObjectState != eObjectState.Active)
             {
                 CleanUp();
                 return false;
@@ -160,16 +166,16 @@ namespace DOL.GS
         {
             bool clearOldStyles = false;
 
-            if (_lastAttackData != null)
+            if (LastAttackData != null)
             {
-                switch (_lastAttackData.AttackResult)
+                switch (LastAttackData.AttackResult)
                 {
                     case eAttackResult.Fumbled:
                     {
                         // Skip this attack if the last one fumbled.
                         StyleComponent.NextCombatStyle = null;
                         StyleComponent.NextCombatBackupStyle = null;
-                        _lastAttackData.AttackResult = eAttackResult.Missed;
+                        LastAttackData.AttackResult = eAttackResult.Missed;
                         _interval = AttackComponent.AttackSpeed(_weapon) * 2;
                         return false;
                     }
@@ -187,9 +193,9 @@ namespace DOL.GS
             if (_combatStyle != null && _combatStyle.WeaponTypeRequirement == (int) eObjectType.Shield)
                 _weapon = _leftWeapon;
 
-            int mainHandAttackSpeed = AttackComponent.AttackSpeed(_weapon);
+            int attackSpeed = AttackComponent.AttackSpeed(_weapon);
 
-            if (clearOldStyles || StyleComponent.NextCombatStyleTime + mainHandAttackSpeed < GameLoop.GameLoopTime)
+            if (clearOldStyles || ServiceUtils.ShouldTick(StyleComponent.NextCombatStyleTime + attackSpeed))
             {
                 // Cancel the styles if they were registered too long ago.
                 // Nature's Shield stays active forever and falls back to a non-backup style.
@@ -212,7 +218,7 @@ namespace DOL.GS
             if (_target is IGamePlayer playerTarget && playerTarget.IsSitting)
                 _effectiveness *= 2;
 
-            _interruptDuration = mainHandAttackSpeed;
+            _interruptDuration = attackSpeed;
             return true;
         }
 
@@ -339,7 +345,6 @@ namespace DOL.GS
         {
             AttackComponent.weaponAction = new WeaponAction(_owner, _target, _weapon, _leftWeapon, _effectiveness, _interruptDuration, _combatStyle);
             AttackComponent.weaponAction.Execute();
-            _lastAttackData = _owner.TempProperties.GetProperty<AttackData>(LAST_ATTACK_DATA, null);
         }
 
         protected virtual void PerformRangedAttack()
@@ -359,15 +364,13 @@ namespace DOL.GS
             }
             else
                 AttackComponent.weaponAction.Execute();
-
-            _lastAttackData = _owner.TempProperties.GetProperty<AttackData>(LAST_ATTACK_DATA, null);
         }
 
         protected virtual bool FinalizeMeleeAttack()
         {
             // Melee weapons tick every TICK_INTERVAL_FOR_NON_ATTACK if they didn't attack.
-            if (_lastAttackData != null &&
-                _lastAttackData.AttackResult is not eAttackResult.Missed
+            if (LastAttackData != null &&
+                LastAttackData.AttackResult is not eAttackResult.Missed
                 and not eAttackResult.HitUnstyled
                 and not eAttackResult.HitStyle
                 and not eAttackResult.Evaded
@@ -422,9 +425,9 @@ namespace DOL.GS
             return true;
         }
 
-        public virtual void CleanUp()
+        protected virtual void CleanUp()
         {
-            _owner.TempProperties.RemoveProperty(LAST_ATTACK_DATA);
+            LastAttackData = null;
             _target = null;
         }
     }

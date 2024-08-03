@@ -84,10 +84,9 @@ namespace DOL.GS.Styles
                     if (requiredAttackResult != eAttackResult.Any && lastRes != requiredAttackResult)
                         return false;
 
-                    break;
-
-                    case Style.eOpening.Defensive:
-                    AttackData targetsLastAD = target.TempProperties.GetProperty<AttackData>(GameLiving.LAST_ATTACK_DATA, null);
+						break;
+					case Style.eOpening.Defensive:
+						AttackData targetsLastAD = target.attackComponent.attackAction.LastAttackData;
 
                     // Last attack result.
                     if (requiredAttackResult != eAttackResult.Any)
@@ -207,11 +206,11 @@ namespace DOL.GS.Styles
                     return;
                 }
 
-                bool automaticStyleUsed = false;
-                if (Properties.AUTO_SELECT_OPENING_STYLE && style.OpeningRequirementType != Style.eOpening.Positional)
-                {
-                    AttackData lastAttackData = player.TempProperties.GetProperty<AttackData>(GameLiving.LAST_ATTACK_DATA, null);
-                    Style styleToUse = style;
+				bool automaticStyleUsed = false;
+				if (Properties.AUTO_SELECT_OPENING_STYLE && style.OpeningRequirementType != Style.eOpening.Positional)
+				{
+					AttackData lastAttackData = player.attackComponent.attackAction.LastAttackData;
+					Style styleToUse = style;
 
                     while (!CanUseStyle(lastAttackData, player, styleToUse, weapon))
                     {
@@ -238,21 +237,21 @@ namespace DOL.GS.Styles
                 if (!Properties.AUTO_SELECT_OPENING_STYLE && style.OpeningRequirementType == Style.eOpening.Offensive && style.AttackResultRequirement == Style.eAttackResultRequirement.Style)
                     preRequireStyle = SkillBase.GetStyleByID(style.OpeningRequirementValue, player.CharacterClass.ID);
 
-                // We have not set any primary style yet?
-                if (player.styleComponent.NextCombatStyle == null)
-                {
-                    if (preRequireStyle != null)
-                    {
-                        AttackData lastAD = player.TempProperties.GetProperty<AttackData>(GameLiving.LAST_ATTACK_DATA, null);
-                        if (lastAD == null
-                            || lastAD.AttackResult != eAttackResult.HitStyle
-                            || lastAD.Style == null
-                            || lastAD.Style.ID != style.OpeningRequirementValue)
-                        {
-                            player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.PerformStyleBefore", preRequireStyle.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
-                            return;
-                        }
-                    }
+				// We have not set any primary style yet?
+				if (player.styleComponent.NextCombatStyle == null)
+				{
+					if (preRequireStyle != null)
+					{
+						AttackData lastAD = player.attackComponent.attackAction.LastAttackData;
+						if (lastAD == null
+							|| lastAD.AttackResult != eAttackResult.HitStyle
+							|| lastAD.Style == null
+							|| lastAD.Style.ID != style.OpeningRequirementValue)
+						{
+							player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.PerformStyleBefore", preRequireStyle.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+							return;
+						}
+					}
 
                     player.styleComponent.NextCombatStyle = style;
                     player.styleComponent.NextCombatBackupStyle = null;
@@ -268,36 +267,36 @@ namespace DOL.GS.Styles
                             effect.Cancel(false, true);
                     }
 
-                    // Unstealth only on primary style to not break stealth with non-stealth backup styles.
-                    if (!style.StealthRequirement)
-                        player.Stealth(false);
-                }
-                else
-                {
-                    // Have we also set the backupstyle already?
-                    if (player.styleComponent.NextCombatBackupStyle != null)
-                        // All styles set, can't change anything now.
-                        player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.AlreadySelectedStyles"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
-                    else
-                    {
-                        // Have we pressed the same style button used for the primary style again?
-                        if (player.styleComponent.NextCombatStyle.ID == style.ID)
-                        {
-                            if (player.styleComponent.CancelStyle)
-                            {
-                                // If yes, we cancel the style.
-                                player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.NoLongerPreparing", player.styleComponent.NextCombatStyle.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
-                                player.styleComponent.NextCombatStyle = null;
-                                player.styleComponent.NextCombatBackupStyle = null;
-                            }
-                            else
-                                player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.AlreadyPreparing"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
-                        }
-                        else
-                        {
-                            if (preRequireStyle != null)
-                            {
-                                AttackData lastAD = player.TempProperties.GetProperty<AttackData>(GameLiving.LAST_ATTACK_DATA, null);
+					// Unstealth only on primary style to not break stealth with non-stealth backup styles.
+					if (!style.StealthRequirement)
+						player.Stealth(false);
+				}
+				else
+				{
+					// Have we also set the backupstyle already?
+					if (player.styleComponent.NextCombatBackupStyle != null)
+						// All styles set, can't change anything now.
+						player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.AlreadySelectedStyles"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+					else
+					{
+						// Have we pressed the same style button used for the primary style again?
+						if (player.styleComponent.NextCombatStyle.ID == style.ID)
+						{
+							if (player.styleComponent.CancelStyle)
+							{
+								// If yes, we cancel the style.
+								player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.NoLongerPreparing", player.styleComponent.NextCombatStyle.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+								player.styleComponent.NextCombatStyle = null;
+								player.styleComponent.NextCombatBackupStyle = null;
+							}
+							else
+								player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.AlreadyPreparing"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+						}
+						else
+						{
+							if (preRequireStyle != null)
+							{
+								AttackData lastAD = player.attackComponent.attackAction.LastAttackData;
 
                                 if (lastAD == null
                                     || lastAD.AttackResult != eAttackResult.HitStyle
@@ -350,25 +349,21 @@ namespace DOL.GS.Styles
                         player.Endurance -= CalculateEnduranceCost(living, style, weapon.SPD_ABS);
                 }
 
-                AttackData lastAttackData = living.TempProperties.GetProperty<AttackData>(GameLiving.LAST_ATTACK_DATA, null);
+				AttackData lastAttackData = living.attackComponent.attackAction.LastAttackData;
 
-                // Did primary and backup style fail?
-                if (!CanUseStyle(lastAttackData, living, style, weapon))
-                {
-                    player?.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.ExecuteStyle.ExecuteFail", style.Name), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
-                    return false;
-                }
-                else
-                {
-                    bool staticGrowth = style.StealthRequirement; // Static growth is not a function of (effective) weapon speed.
-                    double talyGrowth = style.GrowthRate;
-                    double talySpec = living.GetModifiedSpecLevel(style.Spec);
-                    double talySpeed = living.attackComponent.AttackSpeed(weapon) * 0.001;
+				// Did primary and backup style fail?
+				if (!CanUseStyle(lastAttackData, living, style, weapon))
+				{
+					player?.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.ExecuteStyle.ExecuteFail", style.Name), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
+					return false;
+				}
+				else
+				{
+					double spec = living.GetModifiedSpecLevel(style.Spec);
 
-                    if (staticGrowth)
-                    {
-                        int spec = Math.Min(living.Level, living.GetModifiedSpecLevel(style.Spec));
-
+					// Stealth openers are unaffected by weapon speed.
+					if (style.StealthRequirement)
+					{
 						switch (style.ID)
 						{
 							case 335: //Backstab I
@@ -407,13 +402,15 @@ namespace DOL.GS.Styles
 					}
 					else
 					{
-						double modifiedGrowthRate = talyGrowth * talySpec * talySpeed / unstyledDamageCap;
+						double growthRate = style.GrowthRate;
+						double attackSpeed = living.attackComponent.AttackSpeed(weapon) * 0.001;
+						double modifiedGrowthRate = growthRate * spec * attackSpeed / unstyledDamageCap;
 						styleDamage = modifiedGrowthRate * unstyledDamage;
 						styleDamageCap = modifiedGrowthRate * unstyledDamageCap;
 
 						// Force styles do at least 1 damage to make level 2 styles actually do something.
 						// Don't forget to ignore the cap. Do it only if the style has a GR.
-						if (styleDamage < 1 && talyGrowth > 0)
+						if (styleDamage < 1 && growthRate > 0)
 						{
 							styleDamage = 1;
 							styleDamageCap = 0;
@@ -615,43 +612,25 @@ namespace DOL.GS.Styles
 		/// <param name="spellID">The spellid of the magical effect</param>
 		protected static ISpellHandler CreateMagicEffect(GameLiving caster, GameLiving target, int spellID)
 		{
-			SpellLine styleLine = SkillBase.GetSpellLine(GlobalSpellsLines.Combat_Styles_Effect);
+			Spell spell = SkillBase.GetSpellByID(spellID);
 
-			if (styleLine == null || target == null) 
+			if (spell == null)
 				return null;
 
-            List<Spell> spells = SkillBase.GetSpellList(styleLine.KeyName);
+			// We have to scale style procs when cast.
+			if (caster is GameSummonedPet pet)
+				pet.ScalePetSpell(spell);
 
-            Spell styleSpell = null;
-            foreach (Spell spell in spells)
-            {
-                if (spell.ID == spellID)
-                {
-                    // We have to scale style procs when cast
-                    if (caster is GameSummonedPet pet)
-                        pet.ScalePetSpell(spell);
+			ISpellHandler spellHandler = ScriptMgr.CreateSpellHandler(caster, spell, SkillBase.GetSpellLine(GlobalSpellsLines.Combat_Styles_Effect));
 
-                    styleSpell = spell;
-                    break;
-                }
-            }
-
-			ISpellHandler spellHandler = ScriptMgr.CreateSpellHandler(caster, styleSpell, styleLine);
-			if (spellHandler == null && styleSpell != null && caster is IGamePlayer)
-			{
-				((GamePlayer)caster).Out.SendMessage(styleSpell.Name + " not implemented yet (" + styleSpell.SpellType + ")", eChatType.CT_System, eChatLoc.CL_SystemWindow);
+			if (spellHandler == null)
 				return null;
-			}
 
-            // No negative effects can be applied on a keep door or via attacking a keep door
-            if ((target is GameKeepComponent || target is GameKeepDoor) && spellHandler?.HasPositiveEffect == false)
-            {
-                return null;
-            }
+			if ((target is GameKeepComponent || target is GameDoorBase) && !spellHandler.HasPositiveEffect)
+				return null;
 
-            return spellHandler;
-        }
-
+			return spellHandler;
+		}
 
 		/// <summary>
 		/// Delve a Style handled by this processor

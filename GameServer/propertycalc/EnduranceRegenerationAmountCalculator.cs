@@ -1,7 +1,6 @@
-﻿using DOL.GS.PropertyCalc;
 using DOL.GS.RealmAbilities;
 
-namespace DOL.GS.Scripts
+namespace DOL.GS.PropertyCalc
 {
     /// <summary>
     /// The health regen rate calculator
@@ -12,22 +11,21 @@ namespace DOL.GS.Scripts
     /// BuffBonusCategory4 unused
     /// BuffBonusMultCategory1 unused
     /// </summary>
-    [PropertyCalculator(eProperty.EnduranceRegenerationRate)]
-    public class EnduranceRegenerationRateCalculator : PropertyCalculator
+    [PropertyCalculator(eProperty.EnduranceRegenerationAmount)]
+    public class EnduranceRegenerationAmountCalculator : PropertyCalculator
     {
-        public EnduranceRegenerationRateCalculator() { }
+        public EnduranceRegenerationAmountCalculator() { }
 
         public override int CalcValue(GameLiving living, eProperty property)
         {
-            IGamePlayer player = living as IGamePlayer;
-
-            int debuff = living.SpecBuffBonusCategory[(int)property];
+            GamePlayer player = living as GamePlayer;
+            int debuff = living.SpecBuffBonusCategory[(int) property];
 
             if (debuff < 0)
                 debuff = -debuff;
 
             // Buffs allow to regenerate endurance even in combat and while moving.
-            double regenBuff = living.BaseBuffBonusCategory[(int)property] + living.ItemBonus[(int)property];
+            double regenBuff = living.BaseBuffBonusCategory[(int) property] + living.ItemBonus[(int) property];
             double regen = regenBuff;
 
             if (regen == 0 && player != null)
@@ -69,15 +67,9 @@ namespace DOL.GS.Scripts
             if (regen < 0)
                 regen = 0;
             else
-                regen *= ServerProperties.Properties.ENDURANCE_REGEN_RATE;
+                regen *= ServerProperties.Properties.ENDURANCE_REGEN_AMOUNT_MODIFIER;
 
-            double decimals = regen - (int)regen;
-
-            // Compensate for int rounding.
-            if (Util.ChanceDouble(decimals))
-                regen += 1;
-
-            return (int)regen;
+            return (int) regen;
         }
     }
 }

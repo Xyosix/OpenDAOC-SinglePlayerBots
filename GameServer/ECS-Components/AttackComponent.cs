@@ -17,7 +17,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using static DOL.GS.GameLiving;
 using static DOL.GS.GameObject;
 
 namespace DOL.GS
@@ -75,12 +74,12 @@ namespace DOL.GS
         /// <summary>
         /// Actually a boolean. Use 'StartAttackRequested' to preserve thread safety.
         /// </summary>
-        private long m_startAttackRequested;
+        private int m_startAttackRequested;
 
         public bool StartAttackRequested
         {
-            get => Interlocked.Read(ref m_startAttackRequested) == 1;
-            set => Interlocked.Exchange(ref m_startAttackRequested, Convert.ToInt64(value));
+            get => Interlocked.CompareExchange(ref m_startAttackRequested, 0, 0) == 1;
+            set => Interlocked.Exchange(ref m_startAttackRequested, Convert.ToInt32(value));
         }
 
         public AttackComponent(GameLiving owner)
@@ -98,14 +97,14 @@ namespace DOL.GS
                 StartAttack();
             }
 
-            attackAction.Tick();
-
-            if (weaponAction?.AttackFinished == true)
-                weaponAction = null;
-
-            if (weaponAction is null && !AttackState)
+            if (attackAction.Tick())
             {
-                attackAction.CleanUp();
+                if (weaponAction?.AttackFinished == true)
+                    weaponAction = null;
+            }
+            else
+            {
+                weaponAction = null;
                 EntityManager.Remove(this);
             }
         }
@@ -1075,12 +1074,9 @@ namespace DOL.GS
             {
                 Attacker = owner,
                 Target = target as GameLiving,
-                Damage = 0,
-                CriticalDamage = 0,
                 Style = style,
-                WeaponSpeed = AttackSpeed(weapon) / 100,
+                WeaponSpeed = AttackSpeed(weapon),
                 DamageType = AttackDamageType(weapon),
-                ArmorHitLocation = eArmorSlot.NOTSET,
                 Weapon = weapon,
                 IsOffHand = weapon != null && weapon.SlotPosition == Slot.LEFTHAND
             };
@@ -1198,7 +1194,7 @@ namespace DOL.GS
             {
                 // Used to tell the difference between a normal miss and a strafing miss.
                 // Ugly, but we shouldn't add a new field to 'AttackData' just for that purpose.
-                ad.MissRate = 0;
+                ad.MissChance = 0;
                 ad.AttackResult = eAttackResult.Missed;
             }
 
@@ -1573,7 +1569,7 @@ namespace DOL.GS
                             }
                             case eAttackResult.Missed:
                             {
-                                owner.Out.SendMessage(message + $" ({ad.MissRate}%)", eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
+                                owner.Out.SendMessage(message + $" ({ad.MissChance}%)", eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
                                 break;
                             }
                             default:
@@ -1687,8 +1683,8 @@ namespace DOL.GS
             ad.Target.StartInterruptTimer(interruptDuration, ad.AttackType, ad.Attacker);
 
             // If we're attacking via melee, start an interrupt timer on ourselves so we cannot swing + immediately cast.
-            if (ad.IsMeleeAttack && owner.StartInterruptTimerOnItselfOnMeleeAttack())
-                owner.StartInterruptTimer(owner.SpellInterruptDuration, ad.AttackType, ad.Attacker);
+            if (ad.IsMeleeAttack)
+                owner.StartInterruptTimer(owner.SelfInterruptDurationOnMeleeAttack, ad.AttackType, ad.Attacker);
 
             owner.OnAttackEnemy(ad);
             return ad;
@@ -1802,7 +1798,7 @@ namespace DOL.GS
         public virtual bool CheckBlock(AttackData ad, int attackerConLevel)
         {
             double blockChance = owner.TryBlock(ad, attackerConLevel, Attackers.Count);
-            ad.BlockChance = blockChance;
+            ad.BlockChance = blockChance * 100;
             double blockRoll;
 
             if (!Properties.OVERRIDE_DECK_RNG && owner is IGamePlayer player)
@@ -1827,7 +1823,7 @@ namespace DOL.GS
                 // Nature's shield, 100% block chance, 120° frontal angle.
                 if (owner.IsObjectInFront(ad.Attacker, 120) && (owner.styleComponent.NextCombatStyle?.ID == 394 || owner.styleComponent.NextCombatBackupStyle?.ID == 394))
                 {
-                    ad.BlockChance = 1;
+                    ad.BlockChance = 100;
                     return true;
                 }
             }
@@ -2051,7 +2047,7 @@ namespace DOL.GS
             GameSpellEffect grapple = null;
             GameSpellEffect brittleguard = null;
 
-            AttackData lastAttackData = owner.TempProperties.GetProperty<AttackData>(LAST_ATTACK_DATA, null);
+            AttackData lastAttackData = owner.attackComponent.attackAction.LastAttackData;
             bool defenseDisabled = ad.Target.IsMezzed | ad.Target.IsStunned | ad.Target.IsSitting;
 
             IGamePlayer playerOwner = owner as IGamePlayer;
@@ -2156,7 +2152,7 @@ namespace DOL.GS
                     lastAttackData = null;
 
                 double evadeChance = owner.TryEvade(ad, lastAttackData, attackerConLevel, Attackers.Count);
-                ad.EvadeChance = evadeChance;
+                ad.EvadeChance = evadeChance * 100;
                 double evadeRoll;
 
                 if (!Properties.OVERRIDE_DECK_RNG && playerOwner != null)
@@ -2179,7 +2175,7 @@ namespace DOL.GS
                 if (ad.IsMeleeAttack)
                 {
                     double parryChance = owner.TryParry(ad, lastAttackData, attackerConLevel, Attackers.Count);
-                    ad.ParryChance = parryChance;
+                    ad.ParryChance = parryChance * 100;
                     double parryRoll;
 
                     if (!Properties.OVERRIDE_DECK_RNG && playerOwner != null)
@@ -2220,7 +2216,7 @@ namespace DOL.GS
             if (dt != null && ad.IsRandomFumble)
                 return eAttackResult.Fumbled;
 
-            ad.MissRate = missChance;
+            ad.MissChance = missChance;
 
             if (missChance > 0)
             {
@@ -2234,17 +2230,19 @@ namespace DOL.GS
                 if (ad.Attacker is GamePlayer misser && misser.UseDetailedCombatLog)
                 {
                     misser.Out.SendMessage($"miss rate on target: {missChance}% rand: {missRoll * 100:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
-                    misser.Out.SendMessage($"Your chance to fumble: {100 * ad.Attacker.ChanceToFumble:0.##}% rand: {100 * missRoll:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
+
+                    if (ad.AttackType != AttackData.eAttackType.Ranged)
+                        misser.Out.SendMessage($"Your chance to fumble: {100 * ad.Attacker.ChanceToFumble:0.##}% rand: {100 * missRoll:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
                 }
 
                 if (ad.Target is GamePlayer missee && missee.UseDetailedCombatLog)
                     missee.Out.SendMessage($"chance to be missed: {missChance}% rand: {missRoll * 100:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
 
-                // Check for normal fumbles.
-                // NOTE: fumbles are a subset of misses, and a player can only fumble if the attack would have been a miss anyways.
                 if (missChance > missRoll * 100)
                 {
-                    if (ad.Attacker.ChanceToFumble > missRoll)
+                    // Check for normal fumbles.
+                    // Fumbles are a subset of misses, and a player can only fumble if the attack would have been a miss anyways.
+                    if (ad.AttackType != AttackData.eAttackType.Ranged && ad.Attacker.ChanceToFumble > missRoll)
                         return eAttackResult.Fumbled;
 
                     return eAttackResult.Missed;
@@ -2413,14 +2411,13 @@ namespace DOL.GS
                         break;
 
                         case eAttackResult.Missed:
-                        string message;
-                        if (ad.MissRate > 0)
-                            message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.Miss") + $" ({ad.MissRate}%)";
-                        else
-                            message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.StrafMiss");
-                        p.Out.SendMessage(message, eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
-                        break;
-
+                            string message;
+                            if (ad.MissChance > 0)
+                                message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.Miss") + $" ({ad.MissChance}%)";
+                            else
+                                message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.StrafMiss");
+                            p.Out.SendMessage(message, eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
+                            break;
                         case eAttackResult.Fumbled:
                         p.Out.SendMessage(
                             LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.Fumble"),
@@ -2548,14 +2545,13 @@ namespace DOL.GS
                         break;
 
                         case eAttackResult.Missed:
-                        string message;
-                        if (ad.MissRate > 0)
-                            message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.Miss") + $" ({ad.MissRate}%)";
-                        else
-                            message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.StrafMiss");
-                        p.Out.SendMessage(message, eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
-                        break;
-
+                            string message;
+                            if (ad.MissChance > 0)
+                                message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.Miss") + $" ({ad.MissChance}%)";
+                            else
+                                message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.StrafMiss");
+                            p.Out.SendMessage(message, eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
+                            break;
                         case eAttackResult.Fumbled:
                         p.Out.SendMessage(
                             LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.Fumble"),

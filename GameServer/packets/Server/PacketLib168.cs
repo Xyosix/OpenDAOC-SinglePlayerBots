@@ -23,7 +23,8 @@ namespace DOL.GS.PacketHandler
 	[PacketLib(168, GameClient.eClientVersion.Version168)]
 	public class PacketLib168 : AbstractPacketLib, IPacketLib
 	{
-		protected const int MaxPacketLength = 2048;
+		protected const int MAX_PACKET_LENGTH = 2048;
+		protected const int JOURNAL_MAX_QUEST_COUNT = 25;
 
 		/// <summary>
 		/// Defines a logger for this class.
@@ -780,7 +781,7 @@ namespace DOL.GS.PacketHandler
 					}
 
 					speed |= (ushort) ((zSpeed & 0x70) << 8);
-					heading = (ushort) (((zSpeed & 0xF) << 12) | (npc.Heading & 0xFFF));
+					heading = (ushort) (((zSpeed & 0xF) << 12) | npc.Heading);
 
 					if (npc.IsDestinationValid)
 					{
@@ -1489,16 +1490,16 @@ namespace DOL.GS.PacketHandler
 			}
 		}
 
-		public virtual void SendCheckLos(GameObject source, GameObject target, CheckLosResponse callback)
+		public virtual bool SendCheckLos(GameObject source, GameObject target, CheckLosResponse callback)
 		{
 			if (m_gameClient.Player == null || source == null || target == null)
-				return;
+				return false;
 
 			ushort sourceObjectId = (ushort) source.ObjectID;
 			ushort targetObjectId = (ushort) target.ObjectID;
 
 			if (!HandleCallback(m_gameClient, sourceObjectId, targetObjectId, callback))
-				return;
+				return false;
 
 			using (var pak = new GSTCPPacketOut(GetPacketCode(eServerPackets.CheckLOSRequest)))
 			{
@@ -1508,6 +1509,8 @@ namespace DOL.GS.PacketHandler
 				pak.WriteShort(0x00); // ?
 				SendTCP(pak);
 			}
+
+			return true;
 
 			static bool HandleCallback(GameClient client, ushort sourceObjectId, ushort targetObjectId, CheckLosResponse callback)
 			{
@@ -1537,30 +1540,88 @@ namespace DOL.GS.PacketHandler
 
 		public virtual void SendQuestListUpdate()
 		{
-			HashSet<byte> sentIndexes = new();
+			SendQuestListUpdate(0);
+		}
+
+		public virtual void SendQuestListUpdate(byte indexOffset)
+		{
+			// Send up to JOURNAL_MAX_QUEST_COUNT quests.
+			// `indexOffset` is used to accommodate for the client version and represents the first index it accepts.
+			// Our dictionary's value doesn't change and starts a 0.
+			byte questIndex;
+			byte lastIndex = (byte) (JOURNAL_MAX_QUEST_COUNT + indexOffset);
+			HashSet<byte> sentIndexes = [];
+			HashSet<AbstractQuest> questsWithTooHighIndex = null;
 
 			foreach (var entry in m_gameClient.Player.QuestList)
 			{
-				SendQuestPacket(entry.Key, entry.Value);
-				sentIndexes.Add(entry.Value);
+				questIndex = (byte) (entry.Value + indexOffset);
+
+				if (questIndex < lastIndex)
+				{
+					SendQuestPacket(entry.Key, questIndex);
+					sentIndexes.Add(questIndex);
+				}
+				else
+				{
+					questsWithTooHighIndex ??= [];
+					questsWithTooHighIndex.Add(entry.Key);
+				}
 			}
 
-			for (byte i = 0; i < 25; i++)
+			// If possible, move and send quests which indexes are too high.
+			if (questsWithTooHighIndex != null)
 			{
-				if (!sentIndexes.Contains(i))
-					SendQuestPacket(null, i);
+				questIndex = indexOffset;
+
+				foreach (AbstractQuest questWithTooHighIndex in questsWithTooHighIndex)
+				{
+					for ( ; questIndex < lastIndex; questIndex++)
+					{
+						if (sentIndexes.Contains(questIndex))
+							continue;
+
+						m_gameClient.Player.QuestList[questWithTooHighIndex] = (byte) (questIndex - indexOffset);
+						SendQuestPacket(questWithTooHighIndex, questIndex);
+						sentIndexes.Add(questIndex);
+						break;
+					}
+
+					if (questIndex == lastIndex)
+						break;
+				}
+			}
+
+			// Send null for unused indexes.
+			for (questIndex = indexOffset; questIndex < lastIndex; questIndex++)
+			{
+				if (!sentIndexes.Contains(questIndex))
+					SendQuestPacket(null, questIndex);
 			}
 		}
 
 		public virtual void SendQuestUpdate(AbstractQuest quest)
 		{
-			if (m_gameClient.Player.QuestList.TryGetValue(quest, out byte index))
-				SendQuestPacket(quest, index);
+			SendQuestUpdate(quest, 0);
+		}
+
+		public virtual void SendQuestUpdate(AbstractQuest quest, byte indexOffset)
+		{
+			if (!m_gameClient.Player.QuestList.TryGetValue(quest, out byte index))
+				return;
+
+			if (index + indexOffset >= JOURNAL_MAX_QUEST_COUNT + indexOffset)
+				return;
+
+			SendQuestPacket(quest, (byte) (index + indexOffset));
 		}
 
 		public virtual void SendQuestRemove(byte index)
 		{
-			SendQuestPacket(null, index);
+			if (m_gameClient.Player.QuestList.Count > JOURNAL_MAX_QUEST_COUNT)
+				SendQuestListUpdate();
+			else
+				SendQuestPacket(null, index);
 		}
 
 		public virtual void SendGroupWindowUpdate()
@@ -4004,7 +4065,7 @@ namespace DOL.GS.PacketHandler
 		{
 		}
 
-		protected void WriteCustomTextWindowData(GSTCPPacketOut pak, IList<string> text)
+		protected static void WriteCustomTextWindowData(GSTCPPacketOut pak, IList<string> text)
 		{
 			byte line = 0;
 			bool needBreak = false;
@@ -4015,7 +4076,7 @@ namespace DOL.GS.PacketHandler
 
 				if (str != null)
 				{
-					if (pak.Position + 4 > MaxPacketLength) // line + pascalstringline(1) + trailingZero
+					if (pak.Position + 4 > MAX_PACKET_LENGTH) // line + pascalstringline(1) + trailingZero
 						return;
 
 					pak.WriteByte(++line);
@@ -4024,7 +4085,7 @@ namespace DOL.GS.PacketHandler
 					{
 						string s = str.Substring(0, byte.MaxValue);
 
-						if (pak.Position + s.Length + 2 > MaxPacketLength)
+						if (pak.Position + s.Length + 2 > MAX_PACKET_LENGTH)
 						{
 							needBreak = true;
 							break;
@@ -4032,16 +4093,16 @@ namespace DOL.GS.PacketHandler
 
 						pak.WritePascalString(s);
 						str = str.Substring(byte.MaxValue, str.Length - byte.MaxValue);
-						if (line >= 200 || pak.Position + Math.Min(byte.MaxValue, str.Length) + 2 >= MaxPacketLength)
+						if (line >= 200 || pak.Position + Math.Min(byte.MaxValue, str.Length) + 2 >= MAX_PACKET_LENGTH)
 							// line + pascalstringline(1) + trailingZero
 							return;
 
 						pak.WriteByte(++line);
 					}
 
-					if (pak.Position + str.Length + 2 > MaxPacketLength) // str.Length + trailing zero
+					if (pak.Position + str.Length + 2 > MAX_PACKET_LENGTH) // str.Length + trailing zero
 					{
-						str = str.Substring(0, (int)Math.Max(Math.Min(1, str.Length), MaxPacketLength - pak.Position - 2));
+						str = str.Substring(0, (int)Math.Max(Math.Min(1, str.Length), MAX_PACKET_LENGTH - pak.Position - 2));
 						needBreak = true;
 					}
 

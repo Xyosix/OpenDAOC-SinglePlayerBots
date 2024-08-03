@@ -27,34 +27,10 @@ namespace DOL.GS.Spells
             base.FinishSpellCast(target);
         }
 
-        public override void ApplyEffectOnTarget(GameLiving target)
-        {
-            // TODO: correct formula
-            Effectiveness = 1.25;
-
-            if (Caster is IGamePlayer)
-            {
-                double lineSpec = Caster.GetModifiedSpecLevel(m_spellLine.Spec);
-
-                if (lineSpec < 1)
-                    lineSpec = 1;
-
-                Effectiveness = 0.75;
-
-                if (Spell.Level > 0)
-                {
-                    Effectiveness += (lineSpec - 1.0) / Spell.Level * 0.5;
-                    if (Effectiveness > 1.25)
-                        Effectiveness = 1.25;
-                }
-            }
-            base.ApplyEffectOnTarget(target);
-        }
-
-        protected override GameSpellEffect CreateSpellEffect(GameLiving target, double effectiveness)
-        {
-            return new GameSpellEffect(this, Spell.Duration, Spell.Frequency, effectiveness);
-        }
+		protected override GameSpellEffect CreateSpellEffect(GameLiving target, double effectiveness)
+		{
+			return new GameSpellEffect(this, Spell.Duration, Spell.Frequency, effectiveness);
+		}
 
         public override void OnEffectStart(GameSpellEffect effect)
         {
@@ -77,10 +53,10 @@ namespace DOL.GS.Spells
             if (target.IsAlive == false)
                 return;
 
-            base.OnDirectEffect(target);
-            double heal = Spell.Value * Effectiveness;
-
-            if (target.Health < target.MaxHealth)
+			base.OnDirectEffect(target);
+			double heal = Spell.Value * CalculateBuffDebuffEffectiveness();
+			
+			if(target.Health < target.MaxHealth)
             {
                 target.Health += (int)heal;
 
@@ -98,7 +74,7 @@ namespace DOL.GS.Spells
 
             if (target.DamageRvRMemory > 0 &&
                 (target is NecromancerPet &&
-                ((target as NecromancerPet).Brain as IControlledBrain).GetPlayerOwner() != null
+                ((target as NecromancerPet).Brain as IControlledBrain).GetIPlayerOwner() != null
                 || target is IGamePlayer))
             {
                 if (target.DamageRvRMemory > 0)

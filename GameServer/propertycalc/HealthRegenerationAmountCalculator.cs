@@ -1,6 +1,4 @@
-﻿using DOL.GS.PropertyCalc;
-
-namespace DOL.GS.Scripts
+namespace DOL.GS.PropertyCalc
 {
     /// <summary>
     /// The health regen rate calculator
@@ -11,10 +9,10 @@ namespace DOL.GS.Scripts
     /// BuffBonusCategory4 unused
     /// BuffBonusMultCategory1 unused
     /// </summary>
-    [PropertyCalculator(eProperty.HealthRegenerationRate)]
-    public class HealthRegenerationRateCalculator : PropertyCalculator
+    [PropertyCalculator(eProperty.HealthRegenerationAmount)]
+    public class HealthRegenerationAmountCalculator : PropertyCalculator
     {
-        public HealthRegenerationRateCalculator() { }
+        public HealthRegenerationAmountCalculator() { }
 
         public override int CalcValue(GameLiving living, eProperty property)
         {
@@ -29,40 +27,33 @@ namespace DOL.GS.Scripts
 
             double regen = 5 + living.Level * 0.5;
 
-            if (living is GameNPC npc && living is not MimicNPC)
+            if (living is GameNPC npc)
             {
                 if (npc.InCombat)
                     regen /= 2.0;
                 else if (npc is not NecromancerPet)
                     regen *= 5;
             }
-            else if (living is IGamePlayer)
+            else if (living is GamePlayer)
             {
                 if (living.IsSitting)
                     regen *= 1.75;
             }
 
-            regen *= ServerProperties.Properties.HEALTH_REGEN_RATE;
-
-            double decimals = regen - (int)regen;
-
-            // Compensate for int rounding.
-            if (Util.ChanceDouble(decimals))
-                regen += 1;
-
+            regen *= ServerProperties.Properties.HEALTH_REGEN_AMOUNT_MODIFIER;
             regen += living.ItemBonus[(int)property];
 
-            int debuff = living.SpecBuffBonusCategory[(int)property];
+            int debuff = living.SpecBuffBonusCategory[(int) property];
 
             if (debuff < 0)
                 debuff = -debuff;
 
-            regen += living.BaseBuffBonusCategory[(int)property] - debuff;
+            regen += living.BaseBuffBonusCategory[(int) property] - debuff;
 
             if (regen < 1)
                 regen = 1;
 
-            return (int)regen;
+            return (int) regen;
         }
     }
 }

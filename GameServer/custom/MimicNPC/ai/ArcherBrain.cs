@@ -32,5 +32,13 @@ namespace DOL.GS.Scripts
 
             return base.CheckSpells(type);
         }
+
+        protected override bool CheckInstantOffensiveSpells(Spell spell)
+        {
+            if (Body.IsStealthed)
+                return false;
+
+            return base.CheckInstantOffensiveSpells(spell);
+        }
     }
 }

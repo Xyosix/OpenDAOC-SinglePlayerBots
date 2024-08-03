@@ -58,13 +58,6 @@ namespace DOL.GS.Scripts
 
             INpcTemplate npcTemplate = NpcTemplateMgr.GetTemplate(60163266);
             LoadTemplate(npcTemplate);
-            Strength = npcTemplate.Strength;
-            Dexterity = npcTemplate.Dexterity;
-            Constitution = npcTemplate.Constitution;
-            Quickness = npcTemplate.Quickness;
-            Piety = npcTemplate.Piety;
-            Intelligence = npcTemplate.Intelligence;
-            Empathy = npcTemplate.Empathy;
 
             LichLordIlronBrain sBrain = new LichLordIlronBrain();
             SetOwnBrain(sBrain);
@@ -131,7 +124,7 @@ namespace DOL.AI.Brain
                 Spawn(); // spawn images
                 foreach (GameNPC mob_c in Body.GetNPCsInRadius(2000))
                 {
-                    if (mob_c?.Brain is IlronImagesBrain && mob_c.IsAlive && mob_c.CanJoinFight)
+                    if (mob_c?.Brain is IlronImagesBrain && mob_c.IsAlive && !mob_c.InCombat)
                     {
                         AddAggroListTo(mob_c.Brain as IlronImagesBrain);
                     }

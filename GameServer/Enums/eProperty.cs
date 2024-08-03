@@ -163,7 +163,7 @@ namespace DOL.GS
 
 		// 116 - 119 Available
 
-		CriticalDotHitChance = 119,
+		CriticalDebuffHitChance = 119,
 
 		Focus_Darkness = 120,
 		Focus_Suppression = 121,
@@ -195,9 +195,9 @@ namespace DOL.GS
 		MaxConcentration = 147,
 		ArmorFactor = 148,
 		ArmorAbsorption = 149,
-		HealthRegenerationRate = 150,
-		PowerRegenerationRate = 151,
-		EnduranceRegenerationRate = 152,
+		HealthRegenerationAmount = 150,
+		PowerRegenerationAmount = 151,
+		EnduranceRegenerationAmount = 152,
 		SpellRange = 153,
 		ArcheryRange = 154,
 		MeleeSpeed = 155,
@@ -242,7 +242,7 @@ namespace DOL.GS
 		BuffEffectiveness = 190,
 		CastingSpeed = 191,
 		OffhandDamageAndChance = 192,
-		DebuffEffectivness = 193,
+		DebuffEffectiveness = 193,
 		Fatigue = 194,
 		HealingEffectiveness = 195,
 		PowerPool = 196,

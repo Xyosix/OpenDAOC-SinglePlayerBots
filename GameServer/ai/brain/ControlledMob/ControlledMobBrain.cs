@@ -145,6 +145,16 @@ namespace DOL.AI.Brain
             return null;
         }
 
+        public virtual IGamePlayer GetIPlayerOwner()
+        {
+            GameLiving living = GetLivingOwner();
+
+            if (living != null && living is IGamePlayer player)
+                return player;
+
+            return null;
+        }
+
         public virtual GameNPC GetNPCOwner()
         {
             if (!(Owner is GameNPC))

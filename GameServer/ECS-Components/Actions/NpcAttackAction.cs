@@ -21,9 +21,9 @@ namespace DOL.GS
         private static int LosCheckInterval => Properties.CHECK_LOS_DURING_RANGED_ATTACK_MINIMUM_INTERVAL;
         private bool HasLosOnCurrentTarget => _losCheckTarget == _target && _hasLos;
 
-        public NpcAttackAction(GameNPC npcOwner) : base(npcOwner)
+        public NpcAttackAction(GameNPC owner) : base(owner)
         {
-            _npcOwner = npcOwner;
+            _npcOwner = owner;
             _isGuardArcher = _npcOwner is GuardArcher;
         }
 
@@ -114,7 +114,7 @@ namespace DOL.GS
             return base.FinalizeRangedAttack();
         }
 
-        public override void CleanUp()
+        protected override void CleanUp()
         {
             if (_npcOwner.Brain is NecromancerPetBrain necromancerPetBrain)
                 necromancerPetBrain.ClearAttackSpellQueue();

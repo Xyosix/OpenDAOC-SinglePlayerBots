@@ -153,7 +153,7 @@ namespace DOL.GS
                     else
                         tblBonusCat[(int)Property] -= effectiveValue;
 
-                    if (Property == eProperty.EnduranceRegenerationRate && tblBonusCat[(int)Property] <= 0)
+                    if (Property == eProperty.EnduranceRegenerationAmount && tblBonusCat[(int)Property] <= 0)
                         tblBonusCat[(int)Property] = 0;
                 }
                     

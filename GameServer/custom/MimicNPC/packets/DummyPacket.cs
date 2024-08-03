@@ -715,5 +715,10 @@ namespace DOL.GS.Scripts
         public void SendXFireInfo(byte flag)
         {
         }
+
+        bool IPacketLib.SendCheckLos(GameObject source, GameObject target, CheckLosResponse callback)
+        {
+            return true;
+        }
     }
 }

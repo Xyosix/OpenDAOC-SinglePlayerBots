@@ -139,7 +139,8 @@ namespace DOL.GS.Spells
 
 		protected virtual void DealDamage(GameLiving target)
 		{
-			if (!target.IsAlive || target.ObjectState != GameLiving.eObjectState.Active) return;
+			if (!target.IsAlive || target.ObjectState != GameLiving.eObjectState.Active)
+				return;
 
 			// calc damage
 			AttackData ad = CalculateDamageToTarget(target);
@@ -163,9 +164,7 @@ namespace DOL.GS.Spells
 				player.Out.SendCheckLos(Caster, player, new CheckLosResponse(ResistSpellCheckLos));
 			}
 			else
-			{
-				SpellResisted(target);
-			}
+				base.OnSpellResisted(target);
 		}
 
 		private void ResistSpellCheckLos(GamePlayer player, eLosCheckResponse response, ushort sourceOID, ushort targetOID)
@@ -176,7 +175,7 @@ namespace DOL.GS.Spells
 				{
 					GameLiving target = Caster.CurrentRegion.GetObject(targetOID) as GameLiving;
 					if (target != null)
-						SpellResisted(target);
+						base.OnSpellResisted(target);
 				}
 				catch (Exception e)
 				{
@@ -184,11 +183,6 @@ namespace DOL.GS.Spells
 						log.Error(string.Format("targetOID:{0} caster:{1} exception:{2}", targetOID, Caster, e));
 				}
 			}
-		}
-
-		private void SpellResisted(GameLiving target)
-		{
-			base.OnSpellResisted(target);
 		}
 
 		// constructor

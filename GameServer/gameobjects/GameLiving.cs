@@ -33,16 +33,9 @@ namespace DOL.GS
         private static readonly log4net.ILog log = log4net.LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
         public static int IN_COMBAT_DURATION = 10000;
 
-        public int UsedConcentration;
-
 		public ConcurrentDictionary<eSpellType, Spell> ActivePulseSpells { get; } = new();
 
-        #region Combat
-
-        /// <summary>
-        /// Holds the AttackData object of last attack
-        /// </summary>
-        public const string LAST_ATTACK_DATA = "LastAttackData";
+		#region Combat
 
         public bool isDeadOrDying = false;
 
@@ -614,14 +607,14 @@ namespace DOL.GS
             set { }
         }
 
-        /// <summary>
-        /// Returns the chance for a critical hit with a spell
-        /// </summary>
-        public virtual int DotCriticalChance
-        {
-            get { return GetModified(eProperty.CriticalDotHitChance); }
-            set { }
-        }
+		/// <summary>
+		/// Returns the chance for a critical hit with a spell
+		/// </summary>
+		public virtual int DebuffCriticalChance
+		{
+			get { return GetModified(eProperty.CriticalDebuffHitChance); }
+			set { }
+		}
 
         /// <summary>
         /// Gets the attack-state of this living
@@ -1009,15 +1002,11 @@ namespace DOL.GS
 			}
 		}
 
-        public virtual bool StartInterruptTimerOnItselfOnMeleeAttack()
-        {
-            return true;
-        }
-
 		public GameObject LastInterrupter { get; private set; }
 		public long InterruptTime { get; private set; }
 		public long SelfInterruptTime { get; private set; }
 		public long InterruptRemainingDuration => !IsBeingInterrupted ? 0 : Math.Max(InterruptTime, SelfInterruptTime) - GameLoop.GameLoopTime;
+		public virtual int SelfInterruptDurationOnMeleeAttack => 3000;
 		public virtual bool IsBeingInterrupted => IsBeingInterruptedIgnoreSelfInterrupt || SelfInterruptTime > GameLoop.GameLoopTime;
 		public virtual bool IsBeingInterruptedIgnoreSelfInterrupt => InterruptTime > GameLoop.GameLoopTime;
 
@@ -1081,42 +1070,36 @@ namespace DOL.GS
 
             // Proc chance is 2.5% per SPD, i.e. 10% for a 3.5 SPD weapon. - Tolakram, changed average speed to 3.5
 
-            int procChance = (int)Math.Ceiling(((weapon.ProcChance > 0 ? weapon.ProcChance : 10) * (weapon.SPD_ABS / 35.0)));
+            int procChance = (int)Math.Ceiling((weapon.ProcChance > 0 ? weapon.ProcChance : 10) * (weapon.SPD_ABS / 35.0));
 
             //Error protection and log for Item Proc's
             Spell procSpell = null;
             Spell procSpell1 = null;
-            if (this is GamePlayer)
-            {
-                SpellLine line = SkillBase.GetSpellLine(GlobalSpellsLines.Item_Effects);
-                if (line != null)
-                {
-                    procSpell = SkillBase.FindSpell(weapon.ProcSpellID, line);
-                    procSpell1 = SkillBase.FindSpell(weapon.ProcSpellID1, line);
 
-                    if (procSpell == null && weapon.ProcSpellID != 0)
-                    {
-                        log.ErrorFormat("- Proc ID {0} Not Found on item: {1} ", weapon.ProcSpellID, weapon.Template.Id_nb);
-                    }
-                    if (procSpell1 == null && weapon.ProcSpellID1 != 0)
-                    {
-                        log.ErrorFormat("- Proc1 ID {0} Not Found on item: {1} ", weapon.ProcSpellID1, weapon.Template.Id_nb);
-                    }
+            if (this is IGamePlayer)
+            {
+                procSpell = SkillBase.GetSpellByID(weapon.ProcSpellID);
+                procSpell1 = SkillBase.GetSpellByID(weapon.ProcSpellID1);
+
+                if (procSpell == null && weapon.ProcSpellID != 0)
+                {
+                    log.ErrorFormat("- Proc ID {0} Not Found on item: {1} ", weapon.ProcSpellID, weapon.Template.Id_nb);
+                }
+                if (procSpell1 == null && weapon.ProcSpellID1 != 0)
+                {
+                    log.ErrorFormat("- Proc1 ID {0} Not Found on item: {1} ", weapon.ProcSpellID1, weapon.Template.Id_nb);
                 }
             }
 
             // Proc #1
             if (procSpell != null && Util.Chance(procChance))
-
                 StartWeaponMagicalEffect(weapon, ad, SkillBase.GetSpellLine(GlobalSpellsLines.Item_Effects), weapon.ProcSpellID, false);
 
             // Proc #2
             if (procSpell1 != null && Util.Chance(procChance))
-
                 StartWeaponMagicalEffect(weapon, ad, SkillBase.GetSpellLine(GlobalSpellsLines.Item_Effects), weapon.ProcSpellID1, false);
 
             // Poison
-
             if (weapon.PoisonSpellID != 0)
             {
                 if (ad.Target.EffectList.GetOfType<RemedyEffect>() != null)
@@ -1146,24 +1129,22 @@ namespace DOL.GS
             }
         }
 
-        /// <summary>
-        /// Make a proc or poison on the weapon go off.
-        /// Will assume spell is in GlobalSpellsLines.Item_Effects even if it's not and use the weapons LevelRequirement
-        /// Item_Effects must be used here because various spell handlers recognize this line to alter variance and other spell parameters
-        /// </summary>
-        protected virtual void StartWeaponMagicalEffect(DbInventoryItem weapon, AttackData ad, SpellLine spellLine, int spellID, bool ignoreLevel)
-        {
-            if (weapon == null)
-                return;
+		/// <summary>
+		/// Make a proc or poison on the weapon go off.
+		/// Will assume spell is in GlobalSpellsLines.Item_Effects even if it's not and use the weapons LevelRequirement
+		/// Item_Effects must be used here because various spell handlers recognize this line to alter variance and other spell parameters
+		/// </summary>
+		protected virtual void StartWeaponMagicalEffect(DbInventoryItem weapon, AttackData ad, SpellLine spellLine, int spellID, bool ignoreLevel)
+		{
+			if (ad == null || weapon == null)
+				return;
 
-            if (spellLine == null)
-            {
-                spellLine = SkillBase.GetSpellLine(GlobalSpellsLines.Item_Effects);
-            }
+			if (spellLine == null)
+				spellLine = SkillBase.GetSpellLine(GlobalSpellsLines.Item_Effects);
 
-            if (spellLine != null && ad != null && weapon != null)
-            {
-                Spell procSpell = SkillBase.FindSpell(spellID, spellLine);
+			if (ad != null)
+			{
+				Spell procSpell = SkillBase.GetSpellByID(spellID);
 
                 if (procSpell != null)
                 {
@@ -1190,20 +1171,13 @@ namespace DOL.GS
                         {
                             bool rangeCheck = spellHandler.Spell.Target == eSpellTarget.ENEMY && spellHandler.Spell.Range > 0;
 
-                            if (!rangeCheck || ad.Attacker.IsWithinRadius(ad.Target, spellHandler.CalculateSpellRange()))
-                                spellHandler.StartSpell(ad.Target, weapon);
-                        }
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// When a ranged attack is finished this is called in order to check LOS for next attack
-        /// </summary>
-        public virtual void RangedAttackFinished()
-        {
-        }
+							if (!rangeCheck || ad.Attacker.IsWithinRadius(ad.Target, spellHandler.CalculateSpellRange()))
+								spellHandler.StartSpell(ad.Target, weapon);
+						}
+					}
+				}
+			}
+		}
 
         /// <summary>
         /// Remove engage effect on this living if it is present.
@@ -1915,118 +1889,101 @@ namespace DOL.GS
             }
         }
 
-        public void HandleDamageShields(AttackData ad)
-        {
-            var dSEffects = effectListComponent.GetSpellEffects(eEffect.FocusShield);
-            // Handle DamageShield damage
-            if (dSEffects != null)
-            {
-                for (int i = 0; i < dSEffects.Count; i++)
-                {
-                    if (dSEffects[i].IsBuffActive)
-                    {
-                        var dSEffect = dSEffects[i];
-
-                        ((DamageShieldSpellHandler)dSEffect.SpellHandler).EventHandler(null, this, new AttackedByEnemyEventArgs(ad));
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Attempt to break/remove CC spells on this living. Returns true if any CC spells were removed.
-        /// </summary>
-        public virtual bool HandleCrowdControlOnAttacked(AttackData ad)
-        {
-            if (effectListComponent == null || ad == null || !ad.IsHit)
-                return false;
+		/// <summary>
+		/// Attempt to break/remove CC spells on this living. Returns true if any CC spells were removed.
+		/// </summary>
+		public virtual bool HandleCrowdControlOnAttacked(AttackData ad)
+		{
+			if (effectListComponent == null || ad == null || !ad.IsHit)
+				return false;
 
             bool removeMez = false;
             bool removeSnare = false; // Immunity-triggering snare/root spells
             bool removeMovementSpeedDebuff = false; // Non-immunity snares like focus snare, melee snares, DD+Snare spells, etc.
 
-            // Attack was Melee
-            if (ad.AttackType != AttackData.eAttackType.Spell)
-            {
-                switch (ad.AttackResult)
-                {
-                    case eAttackResult.HitStyle:
-                    case eAttackResult.HitUnstyled:
-                    removeSnare = true;
-                    removeMez = true;
-                    removeMovementSpeedDebuff = true;
-                    break;
+			// Attack was Melee
+			if (ad.AttackType != AttackData.eAttackType.Spell)
+			{
+				switch (ad.AttackResult)
+				{
+					case eAttackResult.HitStyle:
+					case eAttackResult.HitUnstyled:
+						removeSnare = true;
+						removeMez = true;
+						removeMovementSpeedDebuff = true;
+						break;
+					case eAttackResult.Blocked:
+					case eAttackResult.Evaded:
+					case eAttackResult.Fumbled:
+					case eAttackResult.Missed:
+					case eAttackResult.Parried:
+						// Missed melee swings still break mez.
+						removeMez = true;
+						break;
+				}
+			}
+			// Attack was a Spell. Note that a spell being resisted does not mean it does not break mez.
+			else
+			{
+				if (ad.Damage > 0)
+				{
+					// Any damage breaks mez and snare/root.
+					removeMez = true;
+					removeSnare = true;
+					removeMovementSpeedDebuff = true;
+				}
+				else if (ad.SpellHandler is
+						NearsightSpellHandler or
+						AmnesiaSpellHandler or
+						DiseaseSpellHandler or
+						SpeedDecreaseSpellHandler or
+						StunSpellHandler or
+						ConfusionSpellHandler or
+						AbstractResistDebuff)
+				{
+					// Non-damaging spells that always break mez.
+					removeMez = true;
+				}
+				else if ((ad.IsSpellResisted || this is GameNPC && this is not MimicNPC) && ad.SpellHandler is not MesmerizeSpellHandler)
+					removeMez = true;
+			}
 
-                    case eAttackResult.Blocked:
-                    case eAttackResult.Evaded:
-                    case eAttackResult.Fumbled:
-                    case eAttackResult.Missed:
-                    case eAttackResult.Parried:
-                    // Missed melee swings still break mez.
-                    removeMez = true;
-                    break;
-                }
-            }
-            // Attack was a Spell. Note that a spell being resisted does not mean it does not break mez.
-            else
-            {
-                // Any damage breaks mez and snare/root.
-                if (ad.Damage > 0)
-                {
-                    removeMez = true;
-                    removeSnare = true;
-                    removeMovementSpeedDebuff = true;
-                }
-                // Most resisted harmful spells break mez. There are some exceptions which can be added here.
-                else if (ad.IsSpellResisted)
-                {
-                    removeMez = true;
-                }
-                // Non-Damaging, non-resisted spells that break mez.
-                else if (ad.SpellHandler is NearsightSpellHandler || ad.SpellHandler is AmnesiaSpellHandler || ad.SpellHandler is DiseaseSpellHandler
-                         || ad.SpellHandler is SpeedDecreaseSpellHandler || ad.SpellHandler is StunSpellHandler || ad.SpellHandler is ConfusionSpellHandler
-                         || ad.SpellHandler is AbstractResistDebuff)
-                {
-                    removeMez = true;
-                }
+			ECSGameEffect effect;
 
-                if (this is GameNPC && this is not MimicNPC && ad.SpellHandler is not MesmerizeSpellHandler)
-                    removeMez = true;
-            }
-
-            // Remove Mez
-            if (removeMez && effectListComponent.Effects.ContainsKey(eEffect.Mez))
-            {
-                var effect = EffectListService.GetEffectOnTarget(this, eEffect.Mez);
-
-                if (effect != null)
-                    EffectService.RequestImmediateCancelEffect(effect);
-            }
-
-            // Remove Snare/Root
-            if (removeSnare && effectListComponent.Effects.ContainsKey(eEffect.Snare))
-            {
-                var effect = EffectListService.GetEffectOnTarget(this, eEffect.Snare);
+			// Remove Mez
+			if (removeMez)
+			{
+				effect = EffectListService.GetEffectOnTarget(this, eEffect.Mez);
 
                 if (effect != null)
                     EffectService.RequestImmediateCancelEffect(effect);
             }
 
-            // Remove MovementSpeedDebuff
-            if (removeMovementSpeedDebuff)
-            {
-                var effect = EffectListService.GetEffectOnTarget(this, eEffect.MovementSpeedDebuff);
+			// Remove Snare/Root
+			if (removeSnare)
+			{
+				effect = EffectListService.GetEffectOnTarget(this, eEffect.Snare);
+
+                if (effect != null)
+                    EffectService.RequestImmediateCancelEffect(effect);
+            }
+
+			// Remove MovementSpeedDebuff
+			if (removeMovementSpeedDebuff)
+			{
+				effect = EffectListService.GetEffectOnTarget(this, eEffect.MovementSpeedDebuff);
 
                 if (effect != null && effect is ECSGameSpellEffect spellEffect && spellEffect.SpellHandler.Spell.SpellType != eSpellType.UnbreakableSpeedDecrease)
                     EffectService.RequestImmediateCancelEffect(effect);
 
-                var ichor_effect = EffectListService.GetEffectOnTarget(this, eEffect.Ichor);
-                if (ichor_effect != null)
-                    EffectService.RequestImmediateCancelEffect(ichor_effect);
-            }
+				effect = EffectListService.GetEffectOnTarget(this, eEffect.Ichor);
 
-            return removeMez || removeSnare || removeMovementSpeedDebuff;
-        }
+				if (effect != null)
+					EffectService.RequestImmediateCancelEffect(effect);
+			}
+
+			return removeMez || removeSnare || removeMovementSpeedDebuff;
+		}
 
         public virtual void HandleMovementSpeedEffectsOnAttacked(AttackData ad)
         {
@@ -3024,7 +2981,7 @@ namespace DOL.GS
 		protected virtual int HealthRegenerationTimerCallback(ECSGameTimer callingTimer)
 		{
 			if (Health < MaxHealth)
-				ChangeHealth(this, eHealthChangeType.Regenerate, GetModified(eProperty.HealthRegenerationRate));
+				ChangeHealth(this, eHealthChangeType.Regenerate, GetModified(eProperty.HealthRegenerationAmount));
 
 			bool atMaxHealth = Health >= MaxHealth;
 
@@ -3037,7 +2994,7 @@ namespace DOL.GS
 					if (atMaxHealth)
 						DamageRvRMemory = 0;
 					else
-						DamageRvRMemory -= Math.Max(GetModified(eProperty.HealthRegenerationRate), 0);
+						DamageRvRMemory -= Math.Max(GetModified(eProperty.HealthRegenerationAmount), 0);
 				}
 			}
 
@@ -3077,7 +3034,7 @@ namespace DOL.GS
 					stackingBonus = p.PowerRegenStackingBonus;
 
 				if (Mana < MaxMana)
-					ChangeMana(this, eManaChangeType.Regenerate, GetModified(eProperty.PowerRegenerationRate) + stackingBonus);
+					ChangeMana(this, eManaChangeType.Regenerate, GetModified(eProperty.PowerRegenerationAmount) + stackingBonus);
 
 				if (Mana >= MaxMana)
 					return 0;
@@ -3112,7 +3069,7 @@ namespace DOL.GS
 		{
 			if (Endurance < MaxEndurance)
 			{
-				int regen = GetModified(eProperty.EnduranceRegenerationRate);
+				int regen = GetModified(eProperty.EnduranceRegenerationAmount);
 
 				if (regen > 0)
 					ChangeEndurance(this, eEnduranceChangeType.Regenerate, regen);
@@ -3831,9 +3788,9 @@ namespace DOL.GS
         /// <summary>
         /// Holds all abilities of the living (KeyName -> Ability)
         /// </summary>
-        protected readonly Dictionary<string, Ability> m_abilities = new Dictionary<string, Ability>();
+        protected Dictionary<string, Ability> m_abilities = [];
 
-        protected readonly Object m_lockAbilities = new Object();
+		protected readonly object m_lockAbilities = new();
 
         /// <summary>
         /// Asks for existence of specific ability
@@ -4180,7 +4137,6 @@ namespace DOL.GS
 			StopHealthRegeneration();
 			StopPowerRegeneration();
 			StopEnduranceRegeneration();
-			attackComponent.attackAction.CleanUp();
 			m_healthRegenerationTimer?.Stop();
 			m_powerRegenerationTimer?.Stop();
 			m_enduRegenerationTimer?.Stop();

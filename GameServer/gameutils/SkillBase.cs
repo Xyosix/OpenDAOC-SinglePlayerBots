@@ -1748,11 +1748,11 @@ namespace DOL.GS
 			m_propertyNames.Add(eProperty.ArmorAbsorption, LanguageMgr.GetTranslation(ServerProperties.Properties.DB_LANGUAGE,
 			                                                                          "SkillBase.RegisterPropertyNames.BonusToArmorAbsorption"));
 
-			m_propertyNames.Add(eProperty.HealthRegenerationRate, LanguageMgr.GetTranslation(ServerProperties.Properties.DB_LANGUAGE,
+			m_propertyNames.Add(eProperty.HealthRegenerationAmount, LanguageMgr.GetTranslation(ServerProperties.Properties.DB_LANGUAGE,
 			                                                                                 "SkillBase.RegisterPropertyNames.HealthRegeneration"));
-			m_propertyNames.Add(eProperty.PowerRegenerationRate, LanguageMgr.GetTranslation(ServerProperties.Properties.DB_LANGUAGE,
+			m_propertyNames.Add(eProperty.PowerRegenerationAmount, LanguageMgr.GetTranslation(ServerProperties.Properties.DB_LANGUAGE,
 			                                                                                "SkillBase.RegisterPropertyNames.PowerRegeneration"));
-			m_propertyNames.Add(eProperty.EnduranceRegenerationRate, LanguageMgr.GetTranslation(ServerProperties.Properties.DB_LANGUAGE,
+			m_propertyNames.Add(eProperty.EnduranceRegenerationAmount, LanguageMgr.GetTranslation(ServerProperties.Properties.DB_LANGUAGE,
 			                                                                                    "SkillBase.RegisterPropertyNames.EnduranceRegeneration"));
 			m_propertyNames.Add(eProperty.SpellRange, LanguageMgr.GetTranslation(ServerProperties.Properties.DB_LANGUAGE,
 			                                                                     "SkillBase.RegisterPropertyNames.SpellRange"));
@@ -1822,7 +1822,7 @@ namespace DOL.GS
 			                                                                       "SkillBase.RegisterPropertyNames.CastingSpeed"));
 			m_propertyNames.Add(eProperty.OffhandDamageAndChance, LanguageMgr.GetTranslation(ServerProperties.Properties.DB_LANGUAGE,
 			                                                                       "SkillBase.RegisterPropertyNames.OffhandChanceAndDamage"));
-			m_propertyNames.Add(eProperty.DebuffEffectivness, LanguageMgr.GetTranslation(ServerProperties.Properties.DB_LANGUAGE,
+			m_propertyNames.Add(eProperty.DebuffEffectiveness, LanguageMgr.GetTranslation(ServerProperties.Properties.DB_LANGUAGE,
 			                                                                             "SkillBase.RegisterPropertyNames.DebuffEffectivness"));
 			m_propertyNames.Add(eProperty.Fatigue, LanguageMgr.GetTranslation(ServerProperties.Properties.DB_LANGUAGE,
 			                                                                  "SkillBase.RegisterPropertyNames.Fatigue"));
@@ -2893,33 +2893,6 @@ namespace DOL.GS
 				return (Spell)spell.Clone();
 
 			return null;
-		}
-
-		/// <summary>
-		/// Will attempt to find either in the spell line given or in the list of all spells
-		/// </summary>
-		/// <param name="spellID"></param>
-		/// <param name="line"></param>
-		/// <returns></returns>
-		public static Spell FindSpell(int spellID, SpellLine line)
-		{
-			Spell spell = null;
-
-			if (line != null)
-			{
-				List<Spell> spells = GetSpellList(line.KeyName);
-				foreach (Spell lineSpell in spells)
-				{
-					if (lineSpell.ID == spellID)
-					{
-						spell = lineSpell;
-						break;
-					}
-				}
-			}
-
-			spell ??= GetSpellByID(spellID);
-			return spell;
 		}
 
 		/// <summary>

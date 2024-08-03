@@ -99,7 +99,7 @@ namespace DOL.GS
             {
                 if (caster != null && caster.effectListComponent.ConcentrationEffects != null)
                 {
-                    caster.UsedConcentration += spell.Concentration;
+                    caster.effectListComponent.AddUsedConcentration(spell.Concentration);
 
                     lock (caster.effectListComponent.ConcentrationEffectsLock)
                     {
@@ -223,7 +223,7 @@ namespace DOL.GS
                 {
                     if (spellEffect.SpellHandler.Caster != null && spellEffect.SpellHandler.Caster.effectListComponent.ConcentrationEffects != null)
                     {
-                        spellEffect.SpellHandler.Caster.UsedConcentration -= spellEffect.SpellHandler.Spell.Concentration;
+                        spellEffect.SpellHandler.Caster.effectListComponent.AddUsedConcentration(-spellEffect.SpellHandler.Spell.Concentration);
 
                         lock (spellEffect.SpellHandler.Caster.effectListComponent.ConcentrationEffectsLock)
                         {
@@ -807,13 +807,13 @@ namespace DOL.GS
                     list.Add(eProperty.Resist_Slash);
                     return list;
                 case eEffect.HealthRegenBuff:
-                    list.Add(eProperty.HealthRegenerationRate);
+                    list.Add(eProperty.HealthRegenerationAmount);
                     return list;
                 case eEffect.PowerRegenBuff:
-                    list.Add(eProperty.PowerRegenerationRate);
+                    list.Add(eProperty.PowerRegenerationAmount);
                     return list;
                 case eEffect.EnduranceRegenBuff:
-                    list.Add(eProperty.EnduranceRegenerationRate);
+                    list.Add(eProperty.EnduranceRegenerationAmount);
                     return list;
                 case eEffect.MeleeHasteBuff:
                 case eEffect.MeleeHasteDebuff:

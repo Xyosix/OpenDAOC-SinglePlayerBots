@@ -899,24 +899,36 @@ namespace DOL.GS.Scripts
 
         private bool AreSpellsEqual(Spell spellOne, Spell spellTwo)
         {
-            return spellOne.DamageType == spellTwo.DamageType &&
-                   spellOne.SpellType == spellTwo.SpellType &&
-                   (spellOne.Frequency == spellTwo.Frequency && spellOne.SpellType != eSpellType.OffensiveProc && spellTwo.SpellType != eSpellType.OffensiveProc) && // Valewalker proc
-                   spellOne.CastTime == spellTwo.CastTime &&
-                   spellOne.Target == spellTwo.Target &&
-                   spellOne.Group == spellTwo.Group &&
-                   spellOne.IsPBAoE == spellTwo.IsPBAoE &&
-                   ((!spellOne.IsAoE && !spellTwo.IsAoE) || (spellOne.IsAoE && spellTwo.IsAoE));
+            bool equalSpells = spellOne.DamageType == spellTwo.DamageType &&
+                               spellOne.SpellType == spellTwo.SpellType &&
+                               spellOne.Frequency == spellTwo.Frequency ||
+                               spellOne.CastTime == spellTwo.CastTime &&
+                               spellOne.Target == spellTwo.Target &&
+                               spellOne.Group == spellTwo.Group &&
+                               spellOne.IsPBAoE == spellTwo.IsPBAoE &&
+                            ((!spellOne.IsAoE && !spellTwo.IsAoE) || (spellOne.IsAoE && spellTwo.IsAoE));
+
+            return equalSpells ? true : HandleSpecificSpells(spellOne, spellTwo);
         }
 
-        private List<Spell> m_spells = new(0);
+        private bool HandleSpecificSpells(Spell spellOne, Spell spellTwo)
+        {
+            // Valewalker proc
+            if (spellOne.ID == 11236 && (spellTwo.ID >= 11232 && spellTwo.ID <= 11235) ||
+                spellTwo.ID == 11236 && (spellOne.ID >= 11232 && spellOne.ID <= 11235))
+                return true;
+
+            return false;
+        }
+
+        private List<Spell> m_spells = [];
 
         /// <summary>
 		/// property of spell array of NPC
 		/// </summary>
-		public override IList Spells
+		public override List<Spell> Spells
         {
-            get { return m_spells; }
+            get => m_spells;
             set
             {
                 if (value == null || value.Count < 1)
@@ -934,8 +946,8 @@ namespace DOL.GS.Scripts
                 }
                 else
                 {
-                    m_spells = value.Cast<Spell>().ToList();
-                    //if(!SortedSpells)
+                    // Voluntary copy. This isn't ideal and needs to be changed eventually.
+                    m_spells = value.ToList();
                     SortSpells();
                 }
             }
@@ -1058,10 +1070,10 @@ namespace DOL.GS.Scripts
             StylesDetaunt?.Clear();
             StylesShield?.Clear();
 
-            if (m_styles == null)
+            if (Styles == null)
                 return;
 
-            foreach (Style s in m_styles)
+            foreach (Style s in Styles)
             {
                 if (s == null)
                     continue;
@@ -1255,13 +1267,21 @@ namespace DOL.GS.Scripts
             return true;
         }
 
+        public override void Delete()
+        {
+            Group?.RemoveMember(this);
+            base.Delete();
+        }
+
         public override bool RemoveFromWorld()
         {
             if (!base.RemoveFromWorld())
                 return false;
 
-            Group?.RemoveMember(this);
             Duel?.Stop();
+
+            if (ControlledBrain != null)
+                CommandNpcRelease();
 
             return true;
         }
@@ -2459,27 +2479,27 @@ namespace DOL.GS.Scripts
 
             if (player.IsUnderwater && player.CanBreathUnderWater == false)
                 player.UpdateWaterBreathState(eWaterBreath.Holding);
+
             //We need two different sickness spells because RvR sickness is not curable by Healer NPC -Unty
             if (applyRezSick)
+            {
                 switch (DeathType)
                 {
                     case eDeathType.RvR:
-                    SpellLine rvrsick = SkillBase.GetSpellLine(GlobalSpellsLines.Realm_Spells);
-                    if (rvrsick == null) return;
-                    Spell rvrillness = SkillBase.FindSpell(8181, rvrsick);
-                    //player.CastSpell(rvrillness, rvrsick);
-                    CastSpell(rvrillness, rvrsick);
-                    break;
-
+                    {
+                        Spell rvrIllness = SkillBase.GetSpellByID(8181);
+                        CastSpell(rvrIllness, SkillBase.GetSpellLine(GlobalSpellsLines.Realm_Spells));
+                        break;
+                    }
                     case eDeathType.PvP: //PvP sickness is the same as PvE sickness - Curable
                     case eDeathType.PvE:
-                    SpellLine pvesick = SkillBase.GetSpellLine(GlobalSpellsLines.Realm_Spells);
-                    if (pvesick == null) return;
-                    Spell pveillness = SkillBase.FindSpell(2435, pvesick);
-                    //player.CastSpell(pveillness, pvesick);
-                    CastSpell(pveillness, pvesick);
-                    break;
+                    {
+                        Spell pveIllness = SkillBase.GetSpellByID(2435);
+                        CastSpell(pveIllness, SkillBase.GetSpellLine(GlobalSpellsLines.Realm_Spells));
+                        break;
+                    }
                 }
+            }
 
             GameEventMgr.RemoveHandler(this, GamePlayerEvent.Revive, new DOLEventHandler(OnRevive));
             m_deathtype = eDeathType.None;
@@ -2788,7 +2808,7 @@ namespace DOL.GS.Scripts
         protected override int HealthRegenerationTimerCallback(ECSGameTimer callingTimer)
         {
             if (Health < MaxHealth)
-                ChangeHealth(this, eHealthChangeType.Regenerate, GetModified(eProperty.HealthRegenerationRate));
+                ChangeHealth(this, eHealthChangeType.Regenerate, GetModified(eProperty.HealthRegenerationAmount));
 
             bool atMaxHealth = Health >= MaxHealth;
 
@@ -2797,7 +2817,7 @@ namespace DOL.GS.Scripts
                 if (atMaxHealth)
                     DamageRvRMemory = 0;
                 else
-                    DamageRvRMemory -= Math.Max(GetModified(eProperty.HealthRegenerationRate), 0);
+                    DamageRvRMemory -= Math.Max(GetModified(eProperty.HealthRegenerationAmount), 0);
             }
 
             if (atMaxHealth)
@@ -2852,7 +2872,7 @@ namespace DOL.GS.Scripts
 
             if (Endurance < MaxEndurance || sprinting)
             {
-                int regen = GetModified(eProperty.EnduranceRegenerationRate);
+                int regen = GetModified(eProperty.EnduranceRegenerationAmount);
                 int endChant = GetModified(eProperty.FatigueConsumption);
                 ECSGameEffect charge = EffectListService.GetEffectOnTarget(this, eEffect.Charge);
                 int longWind = 5;
@@ -2978,14 +2998,11 @@ namespace DOL.GS.Scripts
         /// <summary>
         /// Calculate max mana for this player based on level and mana stat level
         /// </summary>
-        /// <param name="level"></param>
-        /// <param name="manaStat"></param>
-        /// <returns></returns>
         public virtual int CalculateMaxMana(int level, int manaStat)
         {
-            int maxpower = 0;
+            int maxPower = 0;
 
-            //Special handling for Vampiirs:
+            // Special handling for Vampiirs:
             /* There is no stat that affects the Vampiir's power pool or the damage done by its power based spells.
              * The Vampiir is not a focus based class like, say, an Enchanter.
              * The Vampiir is a lot more cut and dried than the typical casting class.
@@ -3002,36 +3019,14 @@ namespace DOL.GS.Scripts
              * Strength ALSO affects the size of the power pool for a Vampiir sort of.
              * Your INNATE strength (the number of attribute points your character has for strength) has no effect at all.
              * Extra points added through ITEMS, however, does increase the size of your power pool.
-
              */
-            if (CharacterClass.ManaStat != eStat.UNDEFINED || CharacterClass.ID == (int)eCharacterClass.Vampiir)
-            {
-                maxpower = Math.Max(5, (level * 5) + (manaStat - 50));
-            }
-            //else if (CharacterClass.ManaStat == eStat.UNDEFINED && Champion && ChampionLevel > 0)
-            //{
-            //    maxpower = 100; // This is a guess, need feedback
-            //}
 
-            #region Calculation : AtlasOF_EtheralBond
+            if (CharacterClass.ManaStat is not eStat.UNDEFINED || (eCharacterClass)CharacterClass.ID is eCharacterClass.Vampiir)
+                maxPower = Math.Max(5, level * 5 + (manaStat - 50));
+            else if (Champion && ChampionLevel > 0)
+                maxPower = 100; // This is a guess, need feedback.
 
-            // --- [START] --- AtlasOF_EtherealBond --------------------------------------------------------
-            AtlasOF_EtherealBondAbility raEtherealBond = GetAbility<AtlasOF_EtherealBondAbility>();
-            if (raEtherealBond != null)
-            {
-                if (raEtherealBond.Level > 0)
-                {
-                    maxpower += (maxpower * raEtherealBond.Level) / 100;
-                }
-            }
-            // --- [ END ] --- AtlasOF_EtherealBond --------------------------------------------------------
-
-            #endregion Calculation : AtlasOF_EtheralBond
-
-            if (maxpower < 0)
-                maxpower = 0;
-
-            return maxpower;
+            return Math.Max(0, maxPower);
         }
 
         /// <summary>
@@ -3106,7 +3101,7 @@ namespace DOL.GS.Scripts
         /// </summary>
         public override int Concentration
         {
-            get { return MaxConcentration - UsedConcentration; }
+            get { return MaxConcentration - effectListComponent.UsedConcentration; }
         }
 
         /// <summary>
@@ -4316,10 +4311,10 @@ namespace DOL.GS.Scripts
                     {
                         if (st.SpecLevelRequirement == 2 && Level > 5)
                         {
-                            if (m_styles.Contains(st))
+                            if (Styles.Contains(st))
                             {
                                 log.Info("Removed base style.");
-                                m_styles.Remove(st);
+                                Styles.Remove(st);
                             }
 
                             continue;
@@ -4341,15 +4336,15 @@ namespace DOL.GS.Scripts
 
         public virtual void AddStyle(Style st, bool notify)
         {
-            lock (m_styles)
+            lock (Styles)
             {
-                if (!m_styles.Contains(st))
+                if (!Styles.Contains(st))
                 {
-                    m_styles.Add(st);
+                    Styles.Add(st);
                 }
             }
 
-            Styles = m_styles;
+            Styles = Styles;
         }
 
         /// <summary>
@@ -5027,7 +5022,27 @@ namespace DOL.GS.Scripts
 
         #endregion Realm-/Region-/Bount-/Skillpoints...
 
-        #region Level/Experience
+        #region Level/Experience/Champ
+
+        private bool _champion;
+        /// <summary>
+        /// Is Champion level activated
+        /// </summary>
+        public virtual bool Champion
+        {
+            get { return false; }
+            set { _champion = value; }
+        }
+
+        private int _championLevel;
+        /// <summary>
+        /// Champion level
+        /// </summary>
+        public virtual int ChampionLevel
+        {
+            get { return 0; }
+            set { _championLevel = value; }
+        }
 
         /// <summary>
         /// What is the maximum level a player can achieve?
@@ -6070,42 +6085,39 @@ namespace DOL.GS.Scripts
                 {
                     SpellLine reactiveEffectLine = SkillBase.GetSpellLine(GlobalSpellsLines.Item_Effects);
 
-                    if (reactiveEffectLine != null)
+                    if (reactiveItem.ProcSpellID != 0)
                     {
-                        if (reactiveItem.ProcSpellID != 0)
+                        Spell spell = SkillBase.GetSpellByID(reactiveItem.ProcSpellID);
+
+                        if (spell != null)
                         {
-                            Spell spell = SkillBase.FindSpell(reactiveItem.ProcSpellID, reactiveEffectLine);
+                            int chance = reactiveItem.ProcChance > 0 ? reactiveItem.ProcChance : 10;
 
-                            if (spell != null)
+                            if (Util.Chance(chance))
                             {
-                                int chance = reactiveItem.ProcChance > 0 ? reactiveItem.ProcChance : 10;
-
-                                if (Util.Chance(chance))
+                                ISpellHandler spellHandler = ScriptMgr.CreateSpellHandler(this, spell, reactiveEffectLine);
+                                if (spellHandler != null)
                                 {
-                                    ISpellHandler spellHandler = ScriptMgr.CreateSpellHandler(this, spell, reactiveEffectLine);
-                                    if (spellHandler != null)
-                                    {
-                                        spellHandler.StartSpell(target, reactiveItem);
-                                    }
+                                    spellHandler.StartSpell(target, reactiveItem);
                                 }
                             }
                         }
+                    }
 
-                        if (reactiveItem.ProcSpellID1 != 0)
+                    if (reactiveItem.ProcSpellID1 != 0)
+                    {
+                        Spell spell = SkillBase.GetSpellByID(reactiveItem.ProcSpellID1);
+
+                        if (spell != null)
                         {
-                            Spell spell = SkillBase.FindSpell(reactiveItem.ProcSpellID1, reactiveEffectLine);
+                            int chance = reactiveItem.ProcChance > 0 ? reactiveItem.ProcChance : 10;
 
-                            if (spell != null)
+                            if (Util.Chance(chance))
                             {
-                                int chance = reactiveItem.ProcChance > 0 ? reactiveItem.ProcChance : 10;
-
-                                if (Util.Chance(chance))
+                                ISpellHandler spellHandler = ScriptMgr.CreateSpellHandler(this, spell, reactiveEffectLine);
+                                if (spellHandler != null)
                                 {
-                                    ISpellHandler spellHandler = ScriptMgr.CreateSpellHandler(this, spell, reactiveEffectLine);
-                                    if (spellHandler != null)
-                                    {
-                                        spellHandler.StartSpell(target, reactiveItem);
-                                    }
+                                    spellHandler.StartSpell(target, reactiveItem);
                                 }
                             }
                         }
@@ -6135,7 +6147,7 @@ namespace DOL.GS.Scripts
         {
             get
             {
-                int range = 150; // Increase default melee range to 150 to help with higher latency players. Was 128.
+                int range = 128;
 
                 if (TargetObject is GameKeepComponent)
                     range += 150;
@@ -6311,11 +6323,11 @@ namespace DOL.GS.Scripts
         public override int WeaponSpecLevel(eObjectType objectType, int slotPosition)
         {
             // Use axe spec if left hand axe is not in the left hand slot.
-            if (objectType == eObjectType.LeftAxe && slotPosition != Slot.LEFTHAND)
+            if (objectType is eObjectType.LeftAxe && slotPosition is not Slot.LEFTHAND)
                 return GameServer.ServerRules.GetObjectSpecLevel(this, eObjectType.Axe);
 
             // Use left axe spec if axe is in the left hand slot.
-            if (slotPosition == Slot.LEFTHAND && objectType == eObjectType.Axe)
+            if (slotPosition is Slot.LEFTHAND && objectType is eObjectType.Axe)
                 return GameServer.ServerRules.GetObjectSpecLevel(this, eObjectType.LeftAxe);
 
             return GameServer.ServerRules.GetObjectSpecLevel(this, objectType);
@@ -6391,20 +6403,20 @@ namespace DOL.GS.Scripts
             return res;
         }
 
-        public virtual String GetWeaponSpec(DbInventoryItem weapon)
+        /// <summary>
+        /// determines current weaponspeclevel
+        /// </summary>
+        public int WeaponBaseSpecLevel(eObjectType objectType, int slotPosition)
         {
-            if (weapon == null)
-                return null;
-            // use axe spec if left hand axe is not in the left hand slot
-            if (weapon.Object_Type == (int)eObjectType.LeftAxe && weapon.SlotPosition != Slot.LEFTHAND)
-                return SkillBase.ObjectTypeToSpec(eObjectType.Axe);
-            // use left axe spec if axe is in the left hand slot
-            if (weapon.SlotPosition == Slot.LEFTHAND
-                && (weapon.Object_Type == (int)eObjectType.Axe
-                    || weapon.Object_Type == (int)eObjectType.Sword
-                    || weapon.Object_Type == (int)eObjectType.Hammer))
-                return SkillBase.ObjectTypeToSpec(eObjectType.LeftAxe);
-            return SkillBase.ObjectTypeToSpec((eObjectType)weapon.Object_Type);
+            // Use axe spec if left hand axe is not in the left hand slot.
+            if (objectType is eObjectType.LeftAxe && slotPosition is not Slot.LEFTHAND)
+                return GameServer.ServerRules.GetObjectBaseSpecLevel(this, eObjectType.Axe);
+
+            // Use left axe spec if axe is in the left hand slot.
+            if (slotPosition is Slot.LEFTHAND && objectType is eObjectType.Axe)
+                return GameServer.ServerRules.GetObjectBaseSpecLevel(this, eObjectType.LeftAxe);
+
+            return GameServer.ServerRules.GetObjectBaseSpecLevel(this, objectType);
         }
 
         /// <summary>
@@ -6415,28 +6427,7 @@ namespace DOL.GS.Scripts
             if (weapon == null)
                 return 0;
 
-            // use axe spec if left hand axe is not in the left hand slot
-            if (weapon.Object_Type == (int)eObjectType.LeftAxe && weapon.SlotPosition != Slot.LEFTHAND)
-            {
-                int res = 0;
-
-                int spec = GetBaseSpecLevel(SkillBase.ObjectTypeToSpec(eObjectType.Axe));
-
-                if (res < spec)
-                    res = spec;
-
-                return res;
-
-                //return GameServer.ServerRules.GetBaseObjectSpecLevel(this, eObjectType.Axe);
-            }
-
-            // use left axe spec if axe is in the left hand slot
-            if (weapon.SlotPosition == Slot.LEFTHAND
-                && (weapon.Object_Type == (int)eObjectType.Axe
-                    || weapon.Object_Type == (int)eObjectType.Sword
-                    || weapon.Object_Type == (int)eObjectType.Hammer))
-                return GetBaseSpecLevel(SkillBase.ObjectTypeToSpec(eObjectType.LeftAxe));
-            return GetBaseSpecLevel(SkillBase.ObjectTypeToSpec((eObjectType)weapon.Object_Type));
+            return WeaponBaseSpecLevel((eObjectType)weapon.Object_Type, weapon.SlotPosition);
         }
 
         /// <summary>
@@ -7160,18 +7151,7 @@ namespace DOL.GS.Scripts
         /// <summary>
         /// Check this flag to see wether this living is involved in combat
         /// </summary>
-        public override bool InCombat
-        {
-            get
-            {
-                IControlledBrain npc = ControlledBrain;
-
-                if (npc != null && npc.Body.InCombat)
-                    return true;
-
-                return base.InCombat;
-            }
-        }
+        public override bool InCombat => base.InCombat || MimicBrain.HasAggro;
 
         #endregion Combat
 
@@ -8419,7 +8399,7 @@ namespace DOL.GS.Scripts
 
                 if (attackComponent.AttackState && ActiveWeaponSlot != eActiveWeaponSlot.Distance)
                 {
-                    AttackData ad = TempProperties.GetProperty<AttackData>(LAST_ATTACK_DATA, null);
+                    AttackData ad = attackComponent.attackAction.LastAttackData;
 
                     if (ad != null && ad.IsMeleeAttack && (ad.AttackResult == eAttackResult.TargetNotVisible || ad.AttackResult == eAttackResult.OutOfRange))
                     {
@@ -8498,7 +8478,8 @@ namespace DOL.GS.Scripts
             set
             {
                 // Force the diving state instead of trusting the client.
-                value = IsUnderwater;
+                if (!value)
+                    value = IsUnderwater;
 
                 if (value && !CurrentZone.IsDivingEnabled && value && Client.Account.PrivLevel == 1)
                 {
@@ -8678,54 +8659,7 @@ namespace DOL.GS.Scripts
         public override bool IsStrafing
         {
             get { return false; }
-            set
-            {
-                m_strafing = value;
-
-                if (value)
-                    OnPlayerMove();
-            }
-        }
-
-        public virtual void OnPlayerMove()
-        {
-            if (IsSitting)
-                Sit(false);
-
-            if (IsCasting)
-                CurrentSpellHandler?.CasterMoves();
-
-            //if (IsCastingRealmAbility)
-            //{
-            //    RealmAbilityCastTimer.Stop();
-            //    RealmAbilityCastTimer = null;
-            //}
-
-            if (attackComponent.AttackState)
-            {
-                if (ActiveWeaponSlot == eActiveWeaponSlot.Distance)
-                {
-                    attackComponent.StopAttack();
-                }
-                else
-                {
-                    AttackData ad = TempProperties.GetProperty<AttackData>(LAST_ATTACK_DATA, null);
-
-                    if (ad != null && ad.IsMeleeAttack && (ad.AttackResult == eAttackResult.TargetNotVisible || ad.AttackResult == eAttackResult.OutOfRange))
-                    {
-                        if (ad.Target != null && IsObjectInFront(ad.Target, 120) && IsWithinRadius(ad.Target, attackComponent.AttackRange))
-                            attackComponent.attackAction.OnEnterMeleeRange();
-                    }
-                }
-            }
-
-            if (effectListComponent.ContainsEffectForEffectType(eEffect.Volley))
-            {
-                AtlasOF_VolleyECSEffect volley = (AtlasOF_VolleyECSEffect)EffectListService.GetEffectOnTarget(this, eEffect.Volley);
-
-                if (volley != null)
-                    volley.OnPlayerMoved();
-            }
+            set { m_strafing = value; }
         }
 
         public virtual bool Sit(bool sit)

@@ -110,7 +110,7 @@ namespace DOL.GS.Spells
             base.OnEffectStart(effect);
         }
 
-        protected override int CalculateEffectDuration(GameLiving target, double effectiveness)
+        protected override int CalculateEffectDuration(GameLiving target)
         {
             return Spell.Duration;
         }
@@ -547,15 +547,18 @@ namespace DOL.GS.Spells
                 return null;
 
             //create the AttackData
-            AttackData ad = new AttackData();
-            ad.Attacker = player;
-            ad.Target = target;
-            ad.Damage = 0;
-            ad.CriticalDamage = 0;
-            ad.WeaponSpeed = player.AttackSpeed(weapon) / 100;
-            ad.DamageType = player.attackComponent.AttackDamageType(weapon);
-            ad.Weapon = weapon;
-            ad.IsOffHand = weapon.Hand == 2;
+            AttackData ad = new()
+            {
+                Attacker = player,
+                Target = target,
+                Damage = 0,
+                CriticalDamage = 0,
+                WeaponSpeed = player.AttackSpeed(weapon),
+                DamageType = player.attackComponent.AttackDamageType(weapon),
+                Weapon = weapon,
+                IsOffHand = weapon.Hand == 2
+            };
+
             //we need to figure out which armor piece they are going to hit.
             //figure out the attacktype
             switch (weapon.Item_Type)
@@ -575,7 +578,8 @@ namespace DOL.GS.Spells
             if (ad.AttackResult == eAttackResult.HitUnstyled || ad.AttackResult == eAttackResult.HitStyle)
             {
                 //we only need to calculate the damage if the attack was a success.
-                double damage = player.attackComponent.AttackDamage(weapon, out _) * Effectiveness;
+                double effectiveness = CalculateDamageEffectiveness();
+                double damage = player.attackComponent.AttackDamage(weapon, out _) * effectiveness;
 
                 if (target is GamePlayer)
                     ad.ArmorHitLocation = ((GamePlayer)target).CalculateArmorHitLocation(ad);
@@ -612,7 +616,7 @@ namespace DOL.GS.Spells
                 damage += resistModifier;
                 ad.Modifier += resist;
                 ad.Damage = (int)damage;
-                ad.Damage = Math.Min(ad.Damage, (int)(player.attackComponent.AttackDamage(weapon, out _) * Effectiveness));
+                ad.Damage = Math.Min(ad.Damage, (int)(player.attackComponent.AttackDamage(weapon, out _) * effectiveness));
                 ad.Damage = (int)(ad.Damage * ServerProperties.Properties.PVP_MELEE_DAMAGE);
                 if (ad.Damage == 0)
                     ad.AttackResult = eAttackResult.Missed;

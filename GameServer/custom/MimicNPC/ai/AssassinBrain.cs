@@ -71,12 +71,6 @@ namespace DOL.GS.Scripts
                         item.PoisonCharges = 1;
                         item.PoisonMaxCharges = 1;
 
-                        if (item.Template is DbItemUnique || (item.Template is DbItemTemplate && item.Template.AllowUpdate))
-                        {
-                            item.Template.PoisonCharges = item.PoisonCharges;
-                            item.Template.PoisonMaxCharges = item.PoisonMaxCharges;
-                        }
-
                         List<int> duplicateList = _envenomSpellIDs.Where(id => id != spellID).ToList();
 
                         if (duplicateList.Count > 0)

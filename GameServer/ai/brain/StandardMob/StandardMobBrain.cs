@@ -54,13 +54,11 @@ namespace DOL.AI.Brain
         public override bool Stop()
         {
             // tolakram - when the brain stops, due to either death or no players in the vicinity, clear the aggro list
-            if (base.Stop())
-            {
-                ClearAggroList();
-                return true;
-            }
+            if (!base.Stop())
+                return false;
 
-            return false;
+            ClearAggroList();
+            return true;
         }
 
         public override void KillFSM()
@@ -80,10 +78,10 @@ namespace DOL.AI.Brain
             FireAmbientSentence();
 
             // Check aggro only if our aggro list is empty and we're not in combat.
-            if (AggroLevel > 0 && AggroRange > 0 && !HasAggro && Body.CurrentSpellHandler == null)
+            if (AggroLevel > 0 && AggroRange > 0 && Body.CurrentSpellHandler == null && !HasAggro && !IsWaitingForLosCheck)
             {
                 CheckPlayerAggro();
-                CheckNPCAggro();
+                CheckNpcAggro();
             }
 
             // Some calls rely on this method to return if there's something in the aggro list, not necessarily to perform a proximity aggro check.
@@ -119,20 +117,21 @@ namespace DOL.AI.Brain
                     continue;
 
                 if (Properties.CHECK_LOS_BEFORE_AGGRO)
-                    // We don't know if the LoS check will be positive, so we have to ask other players
-                    player.Out.SendCheckLos(Body, player, new CheckLosResponse(LosCheckForAggroCallback));
+                    SendLosCheckForAggro(player, player);
                 else
                 {
                     AddToAggroList(player, 1);
                     return;
                 }
+
+                // We don't know if the LoS check will be positive, so we have to ask other players
             }
         }
 
         /// <summary>
         /// Check for aggro against close NPCs
         /// </summary>
-        protected virtual void CheckNPCAggro()
+        protected virtual void CheckNpcAggro()
         {
             foreach (GameNPC npc in Body.GetNPCsInRadius((ushort) AggroRange))
             {
@@ -147,12 +146,12 @@ namespace DOL.AI.Brain
                     // Check LoS if either the target or the current mob is a pet
                     if (npc.Brain is ControlledMobBrain theirControlledNpcBrain && theirControlledNpcBrain.GetPlayerOwner() is GamePlayer theirOwner)
                     {
-                        theirOwner.Out.SendCheckLos(Body, npc, new CheckLosResponse(LosCheckForAggroCallback));
+                        SendLosCheckForAggro(theirOwner, npc);
                         continue;
                     }
                     else if (this is ControlledMobBrain ourControlledNpcBrain && ourControlledNpcBrain.GetPlayerOwner() is GamePlayer ourOwner)
                     {
-                        ourOwner.Out.SendCheckLos(Body, npc, new CheckLosResponse(LosCheckForAggroCallback));
+                        SendLosCheckForAggro(ourOwner, npc);
                         continue;
                     }
                 }
@@ -242,7 +241,8 @@ namespace DOL.AI.Brain
         /// </summary>
         public virtual int AggroLevel { get; set; }
 
-        protected ConcurrentDictionary<GameLiving, AggroAmount> AggroList { get; } = new();
+        private ConcurrentDictionary<GameLiving, AggroAmount> _tempAggroList = new();
+        protected ConcurrentDictionary<GameLiving, AggroAmount> AggroList { get; private set; } = new();
         protected List<(GameLiving, long)> OrderedAggroList { get; private set; } = [];
         public GameLiving LastHighestThreatInAttackRange { get; private set; }
 
@@ -275,6 +275,11 @@ namespace DOL.AI.Brain
             if (Body.IsConfused || !Body.IsAlive || living == null)
                 return;
 
+            ForceAddToAggroList(living, aggroAmount);
+        }
+
+        public void ForceAddToAggroList(GameLiving living, long aggroAmount)
+        {
             if (aggroAmount > 0)
             {
                 foreach (ProtectECSGameEffect protect in living.effectListComponent.GetAbilityEffects().Where(e => e.EffectType == eEffect.Protect))
@@ -327,6 +332,13 @@ namespace DOL.AI.Brain
                 }
             }
 
+            // Change state and reschedule the next think tick to improve responsiveness.
+            if (FSM.GetCurrentState() != FSM.GetState(eFSMStateType.AGGRO) && HasAggro)
+            {
+                FSM.SetCurrentState(eFSMStateType.AGGRO);
+                NextThinkTick = GameLoop.GameLoopTime;
+            }
+
             static AggroAmount Add(GameLiving key, long arg)
             {
                 return new(Math.Max(0, arg));
@@ -359,6 +371,35 @@ namespace DOL.AI.Brain
         public long GetBaseAggroAmount(GameLiving living)
         {
             return AggroList.TryGetValue(living, out AggroAmount aggroAmount) ? aggroAmount.Base : 0;
+        }
+
+        public bool SetTemporaryAggroList()
+        {
+            if (_tempAggroList != null)
+                return false;
+
+            _tempAggroList = AggroList;
+            AggroList = new();
+            return true;
+        }
+
+        public bool UnsetTemporaryAggroList()
+        {
+            if (_tempAggroList == null)
+                return false;
+
+            AggroList = _tempAggroList;
+            _tempAggroList = null;
+
+            if (HasAggro)
+            {
+                if (FSM.GetCurrentState() != FSM.GetState(eFSMStateType.AGGRO))
+                    FSM.SetCurrentState(eFSMStateType.AGGRO);
+
+                NextThinkTick = GameLoop.GameLoopTime;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -405,13 +446,23 @@ namespace DOL.AI.Brain
         }
 
         private long _isHandlingAdditionToAggroListFromLosCheck;
+        private int _losCheckCount;
         private bool StartAddToAggroListFromLosCheck => Interlocked.Exchange(ref _isHandlingAdditionToAggroListFromLosCheck, 1) == 0; // Returns true the first time it's called.
+        private bool IsWaitingForLosCheck => Interlocked.CompareExchange(ref _losCheckCount, 0, 0) > 0;
+        protected virtual bool CanAddToAggroListFromMultipleLosChecks => false;
 
-        protected virtual void LosCheckForAggroCallback(GamePlayer player, eLosCheckResponse response, ushort sourceOID, ushort targetOID)
+        protected void SendLosCheckForAggro(GamePlayer player, GameObject target)
+        {
+            if (player.Out.SendCheckLos(Body, target, new CheckLosResponse(LosCheckForAggroCallback)))
+                Interlocked.Increment(ref _losCheckCount);
+        }
+
+        protected void LosCheckForAggroCallback(GamePlayer player, eLosCheckResponse response, ushort sourceOID, ushort targetOID)
         {
             // Make sure only one thread can enter this block to prevent multiple entities from being added to the aggro list.
             // Otherwise mobs could kill one player and immediately go for another one.
-            if (response is eLosCheckResponse.TRUE && StartAddToAggroListFromLosCheck)
+            // This method should not be allowed to be executed at the same time as `CheckPlayerAggro` or `CheckNPCAggro`.
+            if (response is eLosCheckResponse.TRUE && (CanAddToAggroListFromMultipleLosChecks || StartAddToAggroListFromLosCheck))
             {
                 if (!HasAggro)
                 {
@@ -423,6 +474,8 @@ namespace DOL.AI.Brain
 
                 _isHandlingAdditionToAggroListFromLosCheck = 0;
             }
+
+            Interlocked.Decrement(ref _losCheckCount);
         }
 
         protected virtual bool ShouldBeRemovedFromAggroList(GameLiving living)
@@ -552,19 +605,11 @@ namespace DOL.AI.Brain
 
         public virtual void OnAttackedByEnemy(AttackData ad)
         {
-            if (!Body.IsAlive || Body.ObjectState != GameObject.eObjectState.Active)
+            if (!Body.IsAlive || Body.ObjectState != GameObject.eObjectState.Active || FSM.GetCurrentState() == FSM.GetState(eFSMStateType.PASSIVE))
                 return;
 
-            if (FSM.GetCurrentState() == FSM.GetState(eFSMStateType.PASSIVE))
-                return;
-
-            ConvertDamageToAggroAmount(ad.Attacker, Math.Max(1, ad.Damage + ad.CriticalDamage));
-
-            if (!Body.attackComponent.AttackState && FSM.GetCurrentState() != FSM.GetState(eFSMStateType.AGGRO))
-            {
-                FSM.SetCurrentState(eFSMStateType.AGGRO);
-                Think();
-            }
+            if (ad.GeneratesAggro)
+                ConvertDamageToAggroAmount(ad.Attacker, Math.Max(1, ad.Damage + ad.CriticalDamage));
         }
 
         /// <summary>
@@ -665,7 +710,6 @@ namespace DOL.AI.Brain
                     target = puller;
 
                 brain.AddToAggroList(target, 1);
-                brain.AttackMostWanted();
             }
 
             int GetMaxAddsCountFromBaf(GameLiving puller, out List<IGamePlayer> otherTargets)
@@ -747,7 +791,7 @@ namespace DOL.AI.Brain
 
             bool WherePredicate(GameNPC npc)
             {
-                return npc != Body && npc.IsFriend(Body) && npc.IsAggressive && npc.CanJoinFight;
+                return npc != Body && npc.IsFriend(Body) && npc.IsAggressive && !npc.InCombat;
             }
 
             long OrderByPredicate(GameNPC npc)

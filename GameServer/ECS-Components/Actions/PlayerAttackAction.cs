@@ -7,9 +7,9 @@ namespace DOL.GS
     {
         private GamePlayer _playerOwner;
 
-        public PlayerAttackAction(GamePlayer playerOwner) : base(playerOwner)
+        public PlayerAttackAction(GamePlayer owner) : base(owner)
         {
-            _playerOwner = playerOwner;
+            _playerOwner = owner;
         }
 
         public override void OnAimInterrupt(GameObject attacker)
@@ -70,7 +70,7 @@ namespace DOL.GS
         {
             bool stopAttack = false;
 
-            if (_playerOwner.rangeAttackComponent.RangedAttackState != eRangedAttackState.AimFireReload)
+            if (_playerOwner.rangeAttackComponent.RangedAttackState is not eRangedAttackState.AimFireReload || _playerOwner.rangeAttackComponent.Ammo.Count == 0)
                 stopAttack = true;
             else if (_playerOwner.Endurance < RangeAttackComponent.DEFAULT_ENDURANCE_COST)
             {
@@ -81,7 +81,7 @@ namespace DOL.GS
             if (stopAttack)
             {
                 AttackComponent.StopAttack();
-                AttackComponent.attackAction.CleanUp();
+                CleanUp();
                 return false;
             }
 

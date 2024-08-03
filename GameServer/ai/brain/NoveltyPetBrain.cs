@@ -18,6 +18,7 @@
  */
 
 using DOL.GS;
+using DOL.GS.Scripts;
 
 namespace DOL.AI.Brain
 {
@@ -49,6 +50,11 @@ namespace DOL.AI.Brain
 
             return null;
         }
+
+		public virtual IGamePlayer GetIPlayerOwner()
+		{
+			return GetPlayerOwner();
+		}
 
 		#region Think
 

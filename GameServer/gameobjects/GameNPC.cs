@@ -166,34 +166,23 @@ namespace DOL.GS
             }
         }
 
-        /// <summary>
-        /// Gets or sets the level of this NPC
-        /// </summary>
-        public override byte Level
-        {
-            get => base.Level;
-            set
-            {
-                bool bMaxHealth = m_health >= MaxHealth;
+		/// <summary>
+		/// Gets or sets the level of this NPC
+		/// </summary>
+		public override byte Level
+		{
+			get => base.Level;
+			set
+			{
+				base.Level = value;
 
-				if (Level != value)
-				{
-					// This is a newly created NPC, so notify nearby players of its creation
-					if (Level < 1 && ObjectState == eObjectState.Active)
-						ClientService.CreateNpcForPlayers(this);
+                if (this is not MimicNPC)
+                    AutoSetStats();
 
-                    base.Level = value;
-
-                    if (this is not MimicNPC)
-                        AutoSetStats();  // Recalculate stats when level changes
-                }
-                else
-                    base.Level = value;
-
-                if (bMaxHealth)
-                    m_health = MaxHealth;
-            }
-        }
+				if (m_health > MaxHealth)
+					m_health = MaxHealth;
+			}
+		}
 
         /// <summary>
         /// Auto set stats based on DB entry, npcTemplate, and level.
@@ -1049,7 +1038,19 @@ namespace DOL.GS
 			if (obj is not DbMob)
 				return;
 
-            base.LoadFromDatabase(obj);
+			// Clear cached values in case this is a reload.
+			NPCTemplate = null;
+			EquipmentTemplateID = null;
+			Inventory = null;
+			_templateEquipmentIds = null;
+			_templateLevels = null;
+			_templateModels = null;
+			_templateSizes = null;
+			Spells = [];
+			Styles = [];
+			Abilities = [];
+
+			base.LoadFromDatabase(obj);
 
 			m_loadedFromScript = false;
 			DbMob dbMob = (DbMob)obj;
@@ -1062,7 +1063,7 @@ namespace DOL.GS
 			m_x = dbMob.X;
 			m_y = dbMob.Y;
 			m_z = dbMob.Z;
-			_heading = (ushort) (dbMob.Heading & 0xFFF);
+			Heading = dbMob.Heading;
 			MaxSpeedBase = (short) dbMob.Speed;
 			CurrentRegionID = dbMob.Region;
 			Realm = (eRealm)dbMob.Realm;
@@ -1071,8 +1072,7 @@ namespace DOL.GS
 			Flags = (eFlags)dbMob.Flags;
 			m_packageID = dbMob.PackageID;
 			m_level = dbMob.Level;
-			AutoSetStats(dbMob);
-			Level = dbMob.Level;
+			AutoSetStats(); // Uses level and npctemplate (should be null at this point).
 			m_health = MaxHealth;
 			MeleeDamageType = (eDamageType)dbMob.MeleeDamageType;
 
@@ -1294,7 +1294,7 @@ namespace DOL.GS
 
 			// Some properties don't have to be reloaded if we're reusing the same template.
 			// Some properties are also randomized and will be changed even if the template doesn't change.
-			bool isNewTemplate = NPCTemplate != template; 
+			bool isNewTemplate = NPCTemplate != template;
 
 			// We need the level to be set before assigning spells to scale pet spells.
 			if (isNewTemplate)
@@ -1302,14 +1302,20 @@ namespace DOL.GS
 				NPCTemplate = template as NpcTemplate;
 				HandleTemplateOnlyProperties();
 				HandleLevelFromNewTemplate();
+				AutoSetStats();
 				HandleSpells();
 				HandleStyles();
 				HandleAbilities();
 			}
 			else
 			{
-				HandleLevel();
-				HandleSpells();
+				if (HandleLevel())
+				{
+					// If the level has changed.
+					AutoSetStats();
+					HandleSpells();
+					// Styles and abilities currently don't need to be refreshed.
+				}
 			}
 
 			// Everything below this point overwrites what is in the mob table.
@@ -1349,11 +1355,15 @@ namespace DOL.GS
 				if (template.ReplaceMobValues &&
 					_templateLevels != null &&
 					_templateLevels.Count > 0 &&
-					byte.TryParse(_templateLevels[Util.Random(0, _templateLevels.Count - 1)], out byte newLevel) &&
-					Level != newLevel)
+					byte.TryParse(_templateLevels[Util.Random(0, _templateLevels.Count - 1)], out byte newLevel))
 				{
-					Level = newLevel;
-					return true;
+					if (Level != newLevel)
+					{
+						Level = newLevel;
+						return true;
+					}
+
+					return false;
 				}
 
 				_templateLevels = null;
@@ -2121,10 +2131,10 @@ namespace DOL.GS
 
             List<GamePlayer> playersInRadius = GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE);
 
-            m_x = x;
-            m_y = y;
-            m_z = z;
-            _heading = heading;
+			m_x = x;
+			m_y = y;
+			m_z = z;
+			Heading = heading;
 
             // Previous position.
             foreach (GamePlayer player in playersInRadius)
@@ -2729,10 +2739,12 @@ namespace DOL.GS
         /// </summary>
         public const int CHARMED_NOEXP_TIMEOUT = 60000;
 
-        public virtual void StopAttack()
-        {
-            attackComponent.StopAttack();
-        }
+		public override bool InCombat => base.InCombat || (Brain is not IControlledBrain && Brain is StandardMobBrain brain && brain.HasAggro);
+
+		public virtual void StopAttack()
+		{
+			attackComponent.StopAttack();
+		}
 
 		/// <summary>
 		/// Starts a melee attack on a target
@@ -3093,13 +3105,16 @@ namespace DOL.GS
             attackComponent.RequestStartAttack(target);
         }
 
-        public override void StartInterruptTimer(int duration, AttackData.eAttackType attackType, GameLiving attacker)
-        {
-            // Increase substantially the base interrupt timer duration for non player controlled NPCs
-            // so that they don't start attacking immediately after the attacker's melee swing interval.
-            // It makes repositioning them easier without having to constantly attack them.
-            if (Brain is not IControlledBrain controlledBrain || controlledBrain.GetPlayerOwner() == null)
-                duration += 2500;
+		public override void StartInterruptTimer(int duration, AttackData.eAttackType attackType, GameLiving attacker)
+		{
+			// Increase substantially the base interrupt timer duration for non player controlled NPCs
+			// so that they don't start attacking immediately after the attacker's melee swing interval.
+			// It makes repositioning them easier without having to constantly attack them.
+			if (attacker != this)
+			{
+				if (Brain is not IControlledBrain controlledBrain || controlledBrain.GetIPlayerOwner() == null)
+					duration += 2500;
+			}
 
             base.StartInterruptTimer(duration, attackType, attacker);
         }
@@ -3118,10 +3133,7 @@ namespace DOL.GS
             return interrupted;
         }
 
-        public override bool StartInterruptTimerOnItselfOnMeleeAttack()
-        {
-            return false;
-        }
+		public override int SelfInterruptDurationOnMeleeAttack => AttackSpeed(ActiveWeapon) / 2;
 
 		/// <summary>
 		/// The time to wait before each mob respawn
@@ -3256,7 +3268,7 @@ namespace DOL.GS
 			m_x = m_spawnPoint.X;
 			m_y = m_spawnPoint.Y;
 			m_z = m_spawnPoint.Z;
-			_heading = m_spawnHeading;
+			Heading = m_spawnHeading;
 			SpawnTick = GameLoop.GameLoopTime;
 			AddToWorld();
 			return 0;
@@ -3590,7 +3602,7 @@ namespace DOL.GS
 
         #region Spell
 
-		private List<Spell> m_spells = new(0);
+		private List<Spell> m_spells = [];
 		private ConcurrentDictionary<GameObject, List<SpellWaitingForLosCheck>> _spellsWaitingForLosCheck = new();
 
 		public class SpellWaitingForLosCheck
@@ -3610,9 +3622,9 @@ namespace DOL.GS
 		/// <summary>
 		/// property of spell array of NPC
 		/// </summary>
-		public virtual IList Spells
+		public virtual List<Spell> Spells
 		{
-			get { return m_spells; }
+			get => m_spells;
 			set
 			{
 				if (value == null || value.Count < 1)
@@ -3627,9 +3639,9 @@ namespace DOL.GS
 				}
 				else
 				{
-					m_spells = value.Cast<Spell>().ToList();
-					//if(!SortedSpells)
-						SortSpells();
+					// Voluntary copy. This isn't ideal and needs to be changed eventually.
+					m_spells = value.ToList();
+					SortSpells();
 				}
 			}
 		}
@@ -3947,20 +3959,19 @@ namespace DOL.GS
 
         #region Styles
 
-        /// <summary>
-        /// Styles for this NPC
-        /// </summary>
-        public IList m_styles = new List<Style>(0);
-
-        public IList Styles
-        {
-            get { return m_styles; }
-            set
-            {
-                m_styles = value;
-                this.SortStyles();
-            }
-        }
+		/// <summary>
+		/// Styles for this NPC
+		/// </summary>
+		private List<Style> m_styles = [];
+		public List<Style> Styles
+		{
+			get => m_styles;
+			set
+			{
+				m_styles = value;
+				SortStyles();
+			}
+		}
 
         /// <summary>
         /// Chain styles for this NPC
@@ -4178,9 +4189,10 @@ namespace DOL.GS
                     tmp = new Dictionary<string, Ability>(m_abilities);
                 }
 
-                return tmp;
-            }
-        }
+				return tmp;
+			}
+			protected set => m_abilities = value;
+		}
 
         #endregion Styles
 
@@ -4374,11 +4386,6 @@ namespace DOL.GS
         #endregion ControlledNPCs
 
 		/// <summary>
-		/// Whether this NPC is available to add on a fight.
-		/// </summary>
-		public virtual bool CanJoinFight => !InCombat && Brain is not IControlledBrain && Brain is StandardMobBrain brain && !brain.HasAggro;
-
-		/// <summary>
 		/// Whether this NPC is aggressive.
 		/// </summary>
 		public virtual bool IsAggressive => Brain is IOldAggressiveBrain;
@@ -4532,11 +4539,11 @@ namespace DOL.GS
                     copyTarget.Inventory = inventoryTemplate.CloneTemplate();
             }
 
-            if (Spells != null && Spells.Count > 0)
-                copyTarget.Spells = new List<Spell>(Spells.Cast<Spell>());
+			if (Spells != null && Spells.Count > 0)
+				copyTarget.Spells = new List<Spell>(Spells);
 
-            if (Styles != null && Styles.Count > 0)
-                copyTarget.Styles = new ArrayList(Styles);
+			if (Styles != null && Styles.Count > 0)
+				copyTarget.Styles = new List<Style>(Styles);
 
             if (copyTarget.Inventory != null)
                 copyTarget.SwitchWeapon(ActiveWeaponSlot);
@@ -4544,10 +4551,10 @@ namespace DOL.GS
             return copyTarget;
         }
 
-        public GameNPC(ABrain defaultBrain) : base()
-        {
-            if (movementComponent == null)
-                movementComponent = (NpcMovementComponent)base.movementComponent;
+		public GameNPC(ABrain defaultBrain) : base()
+		{
+			if (movementComponent == null)
+				movementComponent = base.movementComponent as NpcMovementComponent;
 
 			Level = 1;
 			m_health = MaxHealth;

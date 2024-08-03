@@ -34,6 +34,8 @@ namespace DOL.GS.Scripts
         public int GetAbilityLevel(string keyName);
         public bool HasSpecialization(string keyName);
         public int GetBaseSpecLevel(string keyName);
+        public int GetWeaponStat(DbInventoryItem weapon);
+        public double GetWeaponSkill(DbInventoryItem weapon);
         public int GetModifiedSpecLevel(string keyName);
         public void DisableSkill(Skill skill, int duration);
 
@@ -107,6 +109,8 @@ namespace DOL.GS.Scripts
         public int RealmLevel { get; set; }
         public int MLLevel { get; set; }
         public eRealm Realm { get; set; }
+        public bool Champion { get; set; }
+        public int ChampionLevel { get; set; }
 
         public double Effectiveness { get; set; }
         public double SpecLock { get; set; }

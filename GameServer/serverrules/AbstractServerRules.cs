@@ -435,9 +435,9 @@ namespace DOL.GS.ServerRules
 				if (attacknpc is GameSummonedPet || attacknpc.Brain is ControlledMobBrain)
 					return true;
 
-				// Mobs can attack mobs only if they both have a faction
-				if (attacknpc is not MimicNPC && defendnpc is not MimicNPC)
-					if (defendnpc.Faction == null || attacknpc.Faction == null)
+                // Mobs can attack mobs only if they both have a faction or if any is confused.
+                if (attacknpc is not MimicNPC && defendnpc is not MimicNPC)
+                    if ((defendnpc.Faction == null || attacknpc.Faction == null) && !defendnpc.IsConfused && !attacknpc.IsConfused)
 						return false;
 			}
 
@@ -971,7 +971,7 @@ namespace DOL.GS.ServerRules
 		/// <param name="player">player whom specializations are checked</param>
 		/// <param name="objectType">object type</param>
 		/// <returns>specialization in object or 0</returns>
-		public virtual int GetBaseObjectSpecLevel(GamePlayer player, eObjectType objectType)
+		public virtual int GetObjectBaseSpecLevel(IGamePlayer player, eObjectType objectType)
 		{
 			int res = 0;
 
@@ -1039,7 +1039,7 @@ namespace DOL.GS.ServerRules
 				m_compatibleObjectTypes[(int)eObjectType.Hammer] = new eObjectType[] { eObjectType.Hammer, eObjectType.CrushingWeapon, eObjectType.Blunt };
 				m_compatibleObjectTypes[(int)eObjectType.Sword] = new eObjectType[] { eObjectType.Sword, eObjectType.SlashingWeapon, eObjectType.Blades };
 				m_compatibleObjectTypes[(int)eObjectType.LeftAxe] = new eObjectType[] { eObjectType.LeftAxe };
-				m_compatibleObjectTypes[(int)eObjectType.Axe] = new eObjectType[] { eObjectType.Axe, eObjectType.SlashingWeapon, eObjectType.Blades }; //eObjectType.LeftAxe removed
+				m_compatibleObjectTypes[(int)eObjectType.Axe] = new eObjectType[] { eObjectType.Axe, eObjectType.SlashingWeapon, eObjectType.Blades };
 				m_compatibleObjectTypes[(int)eObjectType.HandToHand] = new eObjectType[] { eObjectType.HandToHand };
 				m_compatibleObjectTypes[(int)eObjectType.Spear] = new eObjectType[] { eObjectType.Spear, eObjectType.CelticSpear, eObjectType.PolearmWeapon };
 				m_compatibleObjectTypes[(int)eObjectType.CompositeBow] = new eObjectType[] { eObjectType.CompositeBow };

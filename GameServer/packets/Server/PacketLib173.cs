@@ -541,33 +541,17 @@ namespace DOL.GS.PacketHandler
 		public override void SendQuestListUpdate()
 		{
 			SendTaskInfo();
-
-			byte questIndex;
-			HashSet<byte> sentIndexes = new();
-
-			foreach (var entry in m_gameClient.Player.QuestList)
-			{
-				questIndex = (byte) (entry.Value + 1);
-				SendQuestPacket(entry.Key, questIndex);
-				sentIndexes.Add(questIndex);
-			}
-
-			for (byte i = 1; i < 26; i++)
-			{
-				if (!sentIndexes.Contains(i))
-					SendQuestPacket(null, i);
-			}
+			base.SendQuestListUpdate(1);
 		}
 
 		public override void SendQuestUpdate(AbstractQuest quest)
 		{
-			if (m_gameClient.Player.QuestList.TryGetValue(quest, out byte index))
-				SendQuestPacket(quest, (byte) (index + 1));
+			base.SendQuestUpdate(quest, 1);
 		}
 
 		public override void SendQuestRemove(byte index)
 		{
-			SendQuestPacket(null, (byte) (index + 1));
+			base.SendQuestRemove((byte) (index + 1));
 		}
 
 		public override void SendRegionChanged()

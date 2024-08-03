@@ -1,3 +1,5 @@
+using DOL.GS.Scripts;
+
 namespace DOL.GS.PropertyCalc
 {
     /// <summary>
@@ -9,10 +11,10 @@ namespace DOL.GS.PropertyCalc
     /// BuffBonusCategory4 unused
     /// BuffBonusMultCategory1 unused
     /// </summary>
-    [PropertyCalculator(eProperty.PowerRegenerationRate)]
-    public class PowerRegenerationRateCalculator : PropertyCalculator
+    [PropertyCalculator(eProperty.PowerRegenerationAmount)]
+    public class PowerRegenerationAmountCalculator : PropertyCalculator
     {
-        public PowerRegenerationRateCalculator() {}
+        public PowerRegenerationAmountCalculator() {}
 
         public override int CalcValue(GameLiving living, eProperty property) 
         {
@@ -24,23 +26,20 @@ namespace DOL.GS.PropertyCalc
 
             double regen = living.Level / 10.0 + living.Level / 2.75;
 
-			if (living.InCombat)
-				regen /= 2.0;
+            // What is this? NPCs don't have power.
+            if (living is GameNPC && living is not MimicNPC && living.InCombat)
+                regen /= 2.0;
 
-            regen *= ServerProperties.Properties.MANA_REGEN_RATE;
-
-            double decimals = regen - (int) regen;
-
-            // Compensate for int rounding.
-            if (Util.ChanceDouble(decimals))
-                regen += 1;
-
+            regen *= ServerProperties.Properties.MANA_REGEN_AMOUNT_MODIFIER;
             int debuff = living.SpecBuffBonusCategory[(int) property];
 
             if (debuff < 0)
                 debuff = -debuff;
 
             regen += living.BaseBuffBonusCategory[(int) property] + living.AbilityBonus[(int) property] + living.ItemBonus[(int) property] - debuff;
+
+            if (ServerProperties.Properties.MANA_REGEN_AMOUNT_HALVED_BELOW_50_PERCENT && living.ManaPercent < 50)
+                regen /= 2;
 
             if (regen < 1)
                 regen = 1;

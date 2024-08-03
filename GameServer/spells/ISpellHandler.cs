@@ -4,11 +4,9 @@ using DOL.GS.Effects;
 
 namespace DOL.GS.Spells
 {
-    public interface ISpellHandler
-    {
-        eCastState CastState { get; set; }
-        GameLiving Target { get; set; }
-        bool HasLos { get; set; }
+	public interface ISpellHandler
+	{
+		GameLiving Target { get; }
 
         ECSGameSpellEffect CreateECSEffect(ECSGameEffectInitParams initParams);
 
@@ -122,17 +120,12 @@ namespace DOL.GS.Spells
         /// </summary>
         bool AllowCoexisting { get; }
 
-        /// <summary>
-        /// Does this spell ignore all damage caps?
-        /// </summary>
-        bool IgnoreDamageCap { get; set; }
-
-        long CastStartTick { get; }
-        /// <summary>
-        /// Should this spell use the minimum variance for the type?
-        /// Followup style effects, for example, always use the minimum variance
-        /// </summary>
-        bool UseMinVariance { get; set; }
+		long CastStartTick { get; }
+		/// <summary>
+		/// Should this spell use the minimum variance for the type?
+		/// Followup style effects, for example, always use the minimum variance
+		/// </summary>
+		bool UseMinVariance { get; set; }
 
         /// <summary>
         /// Actions to take when the effect starts

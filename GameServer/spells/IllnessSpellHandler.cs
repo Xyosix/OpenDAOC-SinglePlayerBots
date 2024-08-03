@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using DOL.Database;
 using DOL.GS.Effects;
+using DOL.GS.Scripts;
 
 namespace DOL.GS.Spells
 {
@@ -12,7 +13,7 @@ namespace DOL.GS.Spells
 	{
 		public override ECSGameSpellEffect CreateECSEffect(ECSGameEffectInitParams initParams)
 		{
-			GamePlayer targetPlayer = Target as GamePlayer;
+			IGamePlayer targetPlayer = Target as IGamePlayer;
 
 			if (targetPlayer != null)
             {
@@ -145,13 +146,7 @@ namespace DOL.GS.Spells
 			return 0;
 		}
 
-		/// <summary>
-		/// Calculates the effect duration in milliseconds
-		/// </summary>
-		/// <param name="target">The effect target</param>
-		/// <param name="effectiveness">The effect effectiveness</param>
-		/// <returns>The effect duration in milliseconds</returns>
-		protected override int CalculateEffectDuration(GameLiving target, double effectiveness)
+		protected override int CalculateEffectDuration(GameLiving target)
 		{
 			double modifier = 1.0;
 			RealmAbilities.VeilRecoveryAbility ab = target.GetAbility<RealmAbilities.VeilRecoveryAbility>();
@@ -162,6 +157,5 @@ namespace DOL.GS.Spells
 		}
 
 		public AbstractIllnessSpellHandler(GameLiving caster, Spell spell, SpellLine spellLine) : base(caster, spell, spellLine) {}
-	
 	}
 }
