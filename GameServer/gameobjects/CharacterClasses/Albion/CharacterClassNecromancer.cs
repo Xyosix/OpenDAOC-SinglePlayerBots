@@ -24,7 +24,7 @@ namespace DOL.GS
 		}
 
 		
-		//private String m_petName = "";
+		//private String m_petName = string.Empty;
 		private int m_savedPetHealthPercent = 0;
 
 		/// <summary>
@@ -49,8 +49,7 @@ namespace DOL.GS
 		/// </summary>
 		public override void CommandNpcRelease()
 		{
-			m_savedPetHealthPercent = (Player.ControlledBrain != null) ? (int)Player.ControlledBrain.Body.HealthPercent : 0;
-
+			m_savedPetHealthPercent = Player.ControlledBrain != null ? Player.ControlledBrain.Body.HealthPercent : 0;
 			base.CommandNpcRelease();
 			OnPetReleased();
 		}

@@ -212,10 +212,11 @@ namespace DOL.GS.Spells
 	[SpellHandlerAttribute("SpeedWrap")]
 	public class SpeedWrapSpellHandler : SpellHandler
 	{
-		public override int CalculateSpellResistChance(GameLiving target)
+		public override double CalculateSpellResistChance(GameLiving target)
 		{
 			return 0;
 		}
+
 		public override void OnEffectStart(GameSpellEffect effect)
 		{
 			base.OnEffectStart(effect);
@@ -240,7 +241,7 @@ namespace DOL.GS.Spells
 		public SummonWarcrystalSpellHandler(GameLiving caster, Spell spell, SpellLine line)
 			: base(caster, spell, line)
 		{
-			string ammo = "";
+			string ammo = string.Empty;
 			switch (Util.Random(1, 2))
 			{
 				case 1:
@@ -385,7 +386,7 @@ namespace DOL.GS.Spells
 			warder.Name = "Battle Warder";
 			warder.Model = 993;
 			warder.MaxSpeedBase = 0;
-			warder.GuildName = "";
+			warder.GuildName = string.Empty;
 			warder.Size = 50;
 		}
 	}
@@ -725,7 +726,7 @@ namespace DOL.GS.Spells
 			return 0;
 		}
 
-		public override int CalculateSpellResistChance(GameLiving target)
+		public override double CalculateSpellResistChance(GameLiving target)
 		{
 			return 0;
 		}

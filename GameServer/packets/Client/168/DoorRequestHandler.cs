@@ -43,7 +43,7 @@ namespace DOL.GS.PacketHandler.Client.v168
 			int radius = Properties.WORLD_PICKUP_DISTANCE * 4;
 			int zoneDoor = doorID / 1000000;
 
-			string debugText = "";
+			string debugText = string.Empty;
 
 			// For ToA the client always sends the same ID so we need to construct an id using the current zone
 			if (client.Player.CurrentRegion.Expansion == (int)eClientExpansion.TrialsOfAtlantis)
@@ -150,7 +150,7 @@ namespace DOL.GS.PacketHandler.Client.v168
 			{
 				if (doorType != 9 && client.Account.PrivLevel > 1 && client.Player.CurrentRegion.IsInstance == false)
 				{
-					if (client.Player.TempProperties.GetProperty(DoorMgr.WANT_TO_ADD_DOORS, false))
+					if (client.Player.TempProperties.GetProperty<bool>(DoorMgr.WANT_TO_ADD_DOORS))
 					{
 						client.Player.Out.SendCustomDialog(
 							"This door is not in the database. Place yourself nearest to this door and click Accept to add it.", AddingDoor);

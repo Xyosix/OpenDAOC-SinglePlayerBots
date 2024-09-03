@@ -33,7 +33,7 @@ namespace DOL.GS
                 UpdatePlayerStatus();
 
             //check for conquest activity
-            if (Caster is GamePlayer caster)
+            if (SpellHandler.Caster is GamePlayer caster)
             {
                 if (ConquestService.ConquestManager.IsPlayerInConquestArea(caster))
                     ConquestService.ConquestManager.AddContributor(caster);

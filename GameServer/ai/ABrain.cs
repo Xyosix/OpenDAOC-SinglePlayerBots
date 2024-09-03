@@ -48,8 +48,12 @@ namespace DOL.AI
         /// <returns>true if stopped</returns>
         public virtual bool Stop()
         {
+            if (EntityManagerId.IsPendingRemoval)
+                return false; // Prevents overrides from doing any redundant work. Maybe counter intuitive.
+
             bool wasReturningToSpawnPoint = Body.IsReturningToSpawnPoint;
             Body.StopMoving();
+            Body.TargetObject = null;
             FSM?.SetCurrentState(eFSMStateType.IDLE);
 
             // Without `IsActive` check, charming a NPC that's returning to spawn would teleport it.

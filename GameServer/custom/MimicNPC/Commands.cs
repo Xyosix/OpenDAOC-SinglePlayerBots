@@ -653,6 +653,63 @@ namespace DOL.GS.Scripts
         }
     }
 
+    [CmdAttribute(
+        "&mguard",
+        ePrivLevel.Player,
+        "/mguard [target name] - Set a target to guard.")]
+    public class GuardCommandHandler : AbstractCommandHandler, ICommandHandler
+    {
+        public void OnCommand(GameClient client, string[] args)
+        {
+            GamePlayer player = client.Player;
+            MimicNPC target = player.TargetObject as MimicNPC;
+
+            if (player.Group == null || target == null || !player.Group.IsInTheGroup(target))
+                return;
+
+            if (!target.HasAbility(Abilities.Guard))
+            {
+                player.Out.SendMessage("I do not have that ability.", eChatType.CT_Say, eChatLoc.CL_SystemWindow);
+                return;
+            }
+
+            GameLiving targetGroupMember = null;
+
+            if (args.Length > 1)
+            {
+                args[1] = args[1].ToLower();
+
+                foreach (GameLiving groupMember in player.Group.GetMembersInTheGroup())
+                {
+                    if (groupMember.Name.ToLower() == args[1])
+                    {
+                        targetGroupMember = groupMember;
+                        break;
+                    }
+                }
+
+                if (targetGroupMember != null)
+                {
+                    if (target.MimicBrain.SetGuard(targetGroupMember, out bool ourEffect))
+                    {
+                        player.Out.SendMessage("I will guard " + args[1], eChatType.CT_Say, eChatLoc.CL_SystemWindow);
+                    }
+                    else
+                    {
+                        if (ourEffect)
+                            player.Out.SendMessage("I will stop guarding " + args[1], eChatType.CT_Say, eChatLoc.CL_SystemWindow);
+                        else
+                            player.Out.SendMessage(args[1] + " is already being guarded.", eChatType.CT_Say, eChatLoc.CL_SystemWindow);
+                    }
+                }
+                else
+                {
+                    player.Out.SendMessage("I could not find " + args[1], eChatType.CT_Say, eChatLoc.CL_SystemWindow);
+                }
+            }
+        }
+    }
+
     #endregion MimicGroup
 
     [CmdAttribute(

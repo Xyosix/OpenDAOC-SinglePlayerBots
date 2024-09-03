@@ -160,20 +160,20 @@ namespace DOL.GS.Spells
 			if (this.CriticalDamage > 0)
 				MessageToCaster("You critically hit for an additional " + this.CriticalDamage + " damage!" + " (" + m_caster.DebuffCriticalChance + "%)", eChatType.CT_YouHit);
 
-            //			if (ad.Damage > 0)
-            //			{
-            //				string modmessage = "";
-            //				if (ad.Modifier > 0) modmessage = " (+"+ad.Modifier+")";
-            //				if (ad.Modifier < 0) modmessage = " ("+ad.Modifier+")";
-            //				MessageToCaster("You hit "+ad.Target.GetName(0, false)+" for " + ad.Damage + " damage!", eChatType.CT_Spell);
-            //			}
-            //			else
-            //			{
-            //				MessageToCaster("You hit "+ad.Target.GetName(0, false)+" for " + ad.Damage + " damage!", eChatType.CT_Spell);
-            //				MessageToCaster(ad.Target.GetName(0, true) + " resists the effect!", eChatType.CT_SpellResisted);
-            //				MessageToLiving(ad.Target, "You resist the effect!", eChatType.CT_SpellResisted);
-            //			}
-        }
+			//			if (ad.Damage > 0)
+			//			{
+			//				string modmessage = string.Empty;
+			//				if (ad.Modifier > 0) modmessage = " (+"+ad.Modifier+")";
+			//				if (ad.Modifier < 0) modmessage = " ("+ad.Modifier+")";
+			//				MessageToCaster("You hit "+ad.Target.GetName(0, false)+" for " + ad.Damage + " damage!", eChatType.CT_Spell);
+			//			}
+			//			else
+			//			{
+			//				MessageToCaster("You hit "+ad.Target.GetName(0, false)+" for " + ad.Damage + " damage!", eChatType.CT_Spell);
+			//				MessageToCaster(ad.Target.GetName(0, true) + " resists the effect!", eChatType.CT_SpellResisted);
+			//				MessageToLiving(ad.Target, "You resist the effect!", eChatType.CT_SpellResisted);
+			//			}
+		}
 
         public override void ApplyEffectOnTarget(GameLiving target)
         {

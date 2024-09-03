@@ -23,7 +23,7 @@ namespace DOL.GS.Scripts
         {
             int chance = living.AbilityBonus[(int)property];
 
-            if (living is GamePlayer player)
+            if (living is IGamePlayer player)
             {
                 if (player.CharacterClass.ClassType is eClassType.ListCaster)
                     chance += 10;

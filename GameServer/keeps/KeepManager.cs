@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using DOL.Database;
+using DOL.GS.Scripts;
 using log4net;
 
 namespace DOL.GS.Keeps
@@ -590,7 +591,7 @@ namespace DOL.GS.Keeps
 		/// <param name="target">The target player</param>
 		/// <param name="checkGroup">Do we check the players group for a friend</param>
 		/// <returns>true if the player is an enemy of the keep</returns>
-		public virtual bool IsEnemy(AbstractGameKeep keep, GamePlayer target, bool checkGroup)
+		public virtual bool IsEnemy(AbstractGameKeep keep, IGamePlayer target, bool checkGroup)
 		{
 			if (target.Client.Account.PrivLevel != 1)
 				return false;
@@ -603,7 +604,7 @@ namespace DOL.GS.Keeps
 				//friendly player in group
 				if (checkGroup && target.Group != null)
 				{
-					foreach (GamePlayer player in target.Group.GetPlayersInTheGroup())
+					foreach (IGamePlayer player in target.Group.GetIPlayersInTheGroup())
 					{
 						if (!IsEnemy(keep, target, false))
 							return false;
@@ -648,10 +649,10 @@ namespace DOL.GS.Keeps
 			return IsEnemy(checker.Component.Keep, target);
 		}
 
-		public virtual bool IsEnemy(GameKeepGuard checker, GamePlayer target, bool checkGroup)
+		public virtual bool IsEnemy(GameKeepGuard checker, IGamePlayer target, bool checkGroup)
 		{
 			if (checker.Component == null || checker.Component.Keep == null)
-				return GameServer.ServerRules.IsAllowedToAttack(checker, target, true);
+				return GameServer.ServerRules.IsAllowedToAttack(checker, (GameLiving)target, true);
 			return IsEnemy(checker.Component.Keep, target, checkGroup);
 		}
 
@@ -828,7 +829,7 @@ namespace DOL.GS.Keeps
 
 		public virtual void ExitBattleground(GamePlayer player)
 		{
-			string location = "";
+			string location = string.Empty;
 			switch (player.Realm)
 			{
 				case eRealm.Albion: location = "Castle Sauvage"; break;
@@ -836,7 +837,7 @@ namespace DOL.GS.Keeps
 				case eRealm.Hibernia: location = "Druim Ligen"; break;
 			}
 
-			if (location != "")
+			if (location != string.Empty)
 			{
 				DbTeleport t = DOLDB<DbTeleport>.SelectObject(DB.Column("TeleportID").IsEqualTo(location));
 				if (t != null)

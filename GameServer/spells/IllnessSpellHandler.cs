@@ -141,7 +141,7 @@ namespace DOL.GS.Spells
 			}
 		}
 
-		public override int CalculateSpellResistChance(GameLiving target)
+		public override double CalculateSpellResistChance(GameLiving target)
 		{
 			return 0;
 		}

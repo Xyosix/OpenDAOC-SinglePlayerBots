@@ -38,7 +38,7 @@ namespace DOL.GS.PacketHandler.Client.v168
             if (client.Player == null && client.Account.Characters != null && client.ClientState == GameClient.eClientState.CharScreen)
             {
                 bool charFound = false;
-                string selectedChar = "";
+                string selectedChar = string.Empty;
                 int realmOffset = charIndex - (client.Account.Realm * 10 - 10);
                 int charSlot = client.Account.Realm * 100 + realmOffset;
 
@@ -192,7 +192,7 @@ namespace DOL.GS.PacketHandler.Client.v168
                 //used only on PvP, sets THIS players ID for nearest friend/enemy buttons and "friendly" name colors
                 //if (GameServer.ServerRules.GetColorHandling(player.Client) == 1) // PvP
                 player.Out.SendObjectGuildID(player, player.Guild);
-                player.Out.SendDebugMode(player.TempProperties.GetProperty(GamePlayer.DEBUG_MODE_PROPERTY, false));
+                player.Out.SendDebugMode(player.TempProperties.GetProperty<bool>(GamePlayer.DEBUG_MODE_PROPERTY));
                 player.Out.SendUpdateMaxSpeed(); // Speed in debug mode ?
                                                  //WARNING: This would change problems if a scripter changed the values for plvl
                                                  //GSMessages.SendDebugMode(client,client.Account.PrivLevel>1);

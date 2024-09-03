@@ -1,4 +1,4 @@
-using DOL.GS.Scripts;
+using System;
 
 namespace DOL.GS.PropertyCalc
 {
@@ -14,9 +14,9 @@ namespace DOL.GS.PropertyCalc
     [PropertyCalculator(eProperty.PowerRegenerationAmount)]
     public class PowerRegenerationAmountCalculator : PropertyCalculator
     {
-        public PowerRegenerationAmountCalculator() {}
+        public PowerRegenerationAmountCalculator() { }
 
-        public override int CalcValue(GameLiving living, eProperty property) 
+        public override int CalcValue(GameLiving living, eProperty property)
         {
             /* PATCH 1.87 COMBAT AND REGENERATION
               - While in combat, health and power regeneration ticks will happen twice as often.
@@ -24,13 +24,10 @@ namespace DOL.GS.PropertyCalc
               - All health and power regeneration aids are now twice as effective.
              */
 
-            double regen = living.Level / 10.0 + living.Level / 2.75;
-
-            // What is this? NPCs don't have power.
-            if (living is GameNPC && living is not MimicNPC && living.InCombat)
-                regen /= 2.0;
-
-            regen *= ServerProperties.Properties.MANA_REGEN_AMOUNT_MODIFIER;
+            // Reverted 1.87 changes.
+            // From DoL's `5 + (living.Level / 2.75)`.
+            // 12 power per tick at level 50 instead of 20.68.
+            double regen = 2.5 + living.Level * 0.2;
             int debuff = living.SpecBuffBonusCategory[(int) property];
 
             if (debuff < 0)
@@ -38,13 +35,16 @@ namespace DOL.GS.PropertyCalc
 
             regen += living.BaseBuffBonusCategory[(int) property] + living.AbilityBonus[(int) property] + living.ItemBonus[(int) property] - debuff;
 
-            if (ServerProperties.Properties.MANA_REGEN_AMOUNT_HALVED_BELOW_50_PERCENT && living.ManaPercent < 50)
+            if (ServerProperties.Properties.MANA_REGEN_AMOUNT_HALVED_BELOW_50_PERCENT &&
+                living is GamePlayer player &&
+                player.CharacterClass.ClassType is eClassType.ListCaster &&
+                player.ManaPercent < 50)
+            {
                 regen /= 2;
+            }
 
-            if (regen < 1)
-                regen = 1;
-
-            return (int) regen;
+            regen *= ServerProperties.Properties.MANA_REGEN_AMOUNT_MODIFIER;
+            return Math.Max(1, (int) regen);
         }
     }
 }

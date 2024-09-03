@@ -16,7 +16,6 @@ namespace DOL.GS
         string IConcentrationEffect.Name => Name;
         ushort IConcentrationEffect.Icon => Icon;
         byte IConcentrationEffect.Concentration => SpellHandler.Spell.Concentration;
-
         public override ushort Icon => SpellHandler.Spell.Icon;
         public override string Name => SpellHandler.Spell.Name;
         public override bool HasPositiveEffect => SpellHandler != null && SpellHandler.HasPositiveEffect;
@@ -25,9 +24,8 @@ namespace DOL.GS
         {
             SpellHandler = initParams.SpellHandler;
             Spell spell = SpellHandler.Spell;
-            EffectType = EffectService.GetEffectFromSpell(SpellHandler.Spell, SpellHandler.SpellLine.IsBaseLine);
+            EffectType = EffectService.GetEffectFromSpell(SpellHandler.Spell);
             PulseFreq = spell.Frequency;
-            Caster = SpellHandler.Caster;
 
             if (spell.SpellType is eSpellType.SpeedDecrease or eSpellType.UnbreakableSpeedDecrease)
             {
@@ -45,7 +43,7 @@ namespace DOL.GS
             }
 
             // These classes start their effects themselves.
-            if (this is not ECSImmunityEffect and not ECSPulseEffect)
+            if (this is not ECSImmunityEffect and not ECSPulseEffect and not BleedECSEffect)
                 EffectService.RequestStartEffect(this);
         }
 
@@ -91,10 +89,10 @@ namespace DOL.GS
             }
         }
 
-        /// <summary>
-        /// Used for 'OnEffectStartMsg' and 'OnEffectExpiresMsg'. Identifies the entity triggering the effect (sometimes the caster and effect owner are the same entity).
-        /// </summary>
-        public GameLiving Caster { get; }
+        public virtual bool IsBetterThan(ECSGameSpellEffect effect)
+        {
+            return SpellHandler.Spell.Value > effect.SpellHandler.Spell.Value || SpellHandler.Spell.Damage > effect.SpellHandler.Spell.Damage;
+        }
 
         /// <summary>
         /// Sends Spell messages to all nearby/associated players when an ability/spell/style effect becomes active on a target.
@@ -132,13 +130,13 @@ namespace DOL.GS
             GameLiving toExclude = null; // Either the caster or the owner if it's a pet.
 
             // Sends a third-person message directly to the caster to indicate the spell had landed, regardless of range.
-            if (msgSelf && Caster != target)
+            if (msgSelf && SpellHandler.Caster != target)
             {
                 ((SpellHandler) SpellHandler).MessageToCaster(Util.MakeSentence(thirdPersonMessage, target.GetName(0, true)), eChatType.CT_Spell);
 
-                if (Caster is GamePlayer)
-                    toExclude = Caster;
-                else if (Caster is GameNPC pet && pet.Brain is ControlledMobBrain petBrain)
+                if (SpellHandler.Caster is GamePlayer)
+                    toExclude = SpellHandler.Caster;
+                else if (SpellHandler.Caster is GameNPC pet && pet.Brain is ControlledMobBrain petBrain)
                 {
                     GamePlayer playerOwner = petBrain.GetPlayerOwner();
 
@@ -150,8 +148,8 @@ namespace DOL.GS
             // Sends a third-person message to all players surrounding the target.
             if (msgArea)
             {
-                if (Caster == target && Caster is GamePlayer)
-                    toExclude = Caster;
+                if (SpellHandler.Caster == target && SpellHandler.Caster is GamePlayer)
+                    toExclude = SpellHandler.Caster;
 
                 // "{0} looks more agile!"
                 Message.SystemToArea(target, Util.MakeSentence(thirdPersonMessage, target.GetName(0, thirdPersonMessage.StartsWith("{0}"))), eChatType.CT_Spell, target, toExclude);
@@ -160,20 +158,21 @@ namespace DOL.GS
 
         public override DbPlayerXEffect getSavedEffect()
         {
-            if (SpellHandler == null || SpellHandler.Spell == null) return null;
+            if (SpellHandler?.Spell == null)
+                return null;
 
-            DbPlayerXEffect eff = new DbPlayerXEffect();
-            eff.Var1 = SpellHandler.Spell.ID;
-            eff.Var2 = Effectiveness;
-            eff.Var3 = (int)SpellHandler.Spell.Value;
+            DbPlayerXEffect eff = new()
+            {
+                Var1 = SpellHandler.Spell.ID,
+                Var2 = Effectiveness,
+                Var3 = (int) SpellHandler.Spell.Value,
+                IsHandler = true,
+                SpellLine = SpellHandler.SpellLine.KeyName
+            };
 
             if (Duration > 0)
-                eff.Duration = (int)(ExpireTick - GameLoop.GameLoopTime);
-            else
-                eff.Duration = 30 * 60 * 1000;
+                eff.Duration = (int) (ExpireTick - GameLoop.GameLoopTime);
 
-            eff.IsHandler = true;
-            eff.SpellLine = SpellHandler.SpellLine.KeyName;
             return eff;
         }
     }

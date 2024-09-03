@@ -123,10 +123,10 @@ namespace DOL.GS
             get { return LanguageDataObject.eTranslationIdentifier.eNPC; }
         }
 
-        /// <summary>
-        /// Holds the translation id.
-        /// </summary>
-        protected string m_translationId = "";
+		/// <summary>
+		/// Holds the translation id.
+		/// </summary>
+		protected string m_translationId = string.Empty;
 
         /// <summary>
         /// Gets or sets the translation id.
@@ -2032,21 +2032,21 @@ namespace DOL.GS
             if (GameServer.Instance.ServerStatus == EGameServerStatus.GSS_Open)
                 FireAmbientSentence(eAmbientTrigger.spawning, this);
 
-            if (ShowTeleporterIndicator)
-            {
-                if (m_teleporterIndicator == null)
-                {
-                    m_teleporterIndicator = new GameNPC
-                    {
-                        Name = "",
-                        Model = 1923,
-                        X = X,
-                        Y = Y,
-                        Z = Z + 1,
-                        CurrentRegionID = CurrentRegionID,
-                        Flags = eFlags.PEACE | eFlags.CANTTARGET | eFlags.DONTSHOWNAME | eFlags.FLYING
-                    };
-                }
+			if (ShowTeleporterIndicator)
+			{
+				if (m_teleporterIndicator == null)
+				{
+					m_teleporterIndicator = new GameNPC
+					{
+						Name = string.Empty,
+						Model = 1923,
+						X = X,
+						Y = Y,
+						Z = Z + 1,
+						CurrentRegionID = CurrentRegionID,
+						Flags = eFlags.PEACE | eFlags.CANTTARGET | eFlags.DONTSHOWNAME | eFlags.FLYING
+					};
+				}
 
                 m_teleporterIndicator.AddToWorld();
             }
@@ -2755,12 +2755,12 @@ namespace DOL.GS
 			attackComponent.RequestStartAttack(target);
 		}
 
-		private double weaponSkillScalingFactor = 15;
+		private double damageFactor = 1;
 		private int orbsReward = 0;
-		
+
 		public override double GetWeaponSkill(DbInventoryItem weapon)
 		{
-			double weaponSkill = Math.Max(1, (int) Level) * (WeaponSkillScalingFactor / 5.75) * (1 + 0.01 * (GetWeaponStat(weapon) + 30) / 2);
+			double weaponSkill = Math.Max(1, (int) Level) * 2.6 * (1 + 0.01 * (GetWeaponStat(weapon) + 30) / 2);
 			return Math.Max(1, weaponSkill * GetModified(eProperty.WeaponSkill) * 0.01);
 		}
 
@@ -2870,14 +2870,10 @@ namespace DOL.GS
             }
         }
 
-        protected void ControlledNPC_Release()
-        {
-            if (this.ControlledBrain != null)
-            {
-                //log.Info("On tue le pet !");
-                this.Notify(GameLivingEvent.PetReleased, ControlledBrain.Body);
-            }
-        }
+		protected void ControlledNPC_Release()
+		{
+			(ControlledBrain as ControlledMobBrain)?.OnRelease();
+		}
 
         /// <summary>
         /// Called when this living dies
@@ -3119,11 +3115,11 @@ namespace DOL.GS
             base.StartInterruptTimer(duration, attackType, attacker);
         }
 
-        protected override bool CheckRangedAttackInterrupt(GameLiving attacker, AttackData.eAttackType attackType)
-        {
-            // Immobile NPCs can only be interrupted from close range attacks.
-            if (MaxSpeedBase == 0 && attackType is AttackData.eAttackType.Ranged or AttackData.eAttackType.Spell && !IsWithinRadius(attacker, 150))
-                return false;
+		protected override bool CheckRangedAttackInterrupt(GameLiving attacker, AttackData.eAttackType attackType)
+		{
+			// Immobile NPCs can only be interrupted by their own target, and in melee range.
+			if (MaxSpeedBase == 0 && (attacker != TargetObject || !IsWithinRadius(attacker, MeleeAttackRange)))
+				return false;
 
             bool interrupted = base.CheckRangedAttackInterrupt(attacker, attackType);
 
@@ -3430,35 +3426,35 @@ namespace DOL.GS
                 GamePlayer playerAttacker = null;
                 BattleGroup activeBG = null;
 
-                if (killer is GamePlayer playerKiller && activeBG != null)
-                    activeBG = playerKiller.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY, null);
+				if (killer is GamePlayer playerKiller && activeBG != null)
+					activeBG = playerKiller.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY);
+				
+				foreach (GameObject gainer in XPGainerList.Keys)
+				{
+					//if a battlegroup killed the mob, filter out any non BG players
+					if (activeBG != null && gainer is GamePlayer p &&
+						p.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY) != activeBG)
+						continue;
+					
+					if (gainer is GamePlayer)
+					{
+						playerAttacker = gainer as GamePlayer;
+						if (loot.Realm == 0)
+							loot.Realm = ((GamePlayer)gainer).Realm;
+					}
+					loot.AddOwner(gainer);
+					if (gainer is GameNPC)
+					{
+						IControlledBrain brain = ((GameNPC)gainer).Brain as IControlledBrain;
+						if (brain != null)
+						{
+							playerAttacker = brain.GetPlayerOwner();
+							loot.AddOwner(brain.GetPlayerOwner());
+						}
+					}
+				}
+				if (playerAttacker == null) return; // no loot if mob kills another mob
 
-                foreach (GameObject gainer in XPGainerList.Keys)
-                {
-                    //if a battlegroup killed the mob, filter out any non BG players
-                    if (activeBG != null && gainer is GamePlayer p &&
-                        p.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY, null) != activeBG)
-                        continue;
-
-                    if (gainer is GamePlayer)
-                    {
-                        playerAttacker = gainer as GamePlayer;
-                        if (loot.Realm == 0)
-                            loot.Realm = ((GamePlayer)gainer).Realm;
-                    }
-                    loot.AddOwner(gainer);
-                    if (gainer is GameNPC)
-                    {
-                        IControlledBrain brain = ((GameNPC)gainer).Brain as IControlledBrain;
-                        if (brain != null)
-                        {
-                            playerAttacker = brain.GetPlayerOwner();
-                            loot.AddOwner(brain.GetPlayerOwner());
-                        }
-                    }
-                }
-                if (playerAttacker == null)
-                    return; // no loot if mob kills another mob
 
                 droplist.Add(loot.GetName(1, false));
                 Diagnostics.StartPerfCounter("ReaperService-NPC-DropLoot-AddToWorld-loot(" + loot.GetHashCode() + ")");
@@ -4403,31 +4399,31 @@ namespace DOL.GS
 			return Faction.FriendFactions.Contains(npc.Faction);
 		}
 
-        /// <summary>
-        /// Broadcast loot to the raid.
-        /// </summary>
-        /// <param name="dropMessages">List of drop messages to broadcast.</param>
-        protected virtual void BroadcastLoot(ArrayList droplist)
-        {
-            if (droplist.Count > 0)
-            {
-                String lastloot;
-                foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.INFO_DISTANCE))
-                {
-                    lastloot = "";
-                    foreach (string str in droplist)
-                    {
-                        // Suppress identical messages (multiple item drops).
-                        if (str != lastloot)
-                        {
-                            player.Out.SendMessage(String.Format(LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.DropLoot.Drops",
-                                GetName(0, true, player.Client.Account.Language, this), str)), eChatType.CT_Loot, eChatLoc.CL_SystemWindow);
-                            lastloot = str;
-                        }
-                    }
-                }
-            }
-        }
+		/// <summary>
+		/// Broadcast loot to the raid.
+		/// </summary>
+		/// <param name="dropMessages">List of drop messages to broadcast.</param>
+		protected virtual void BroadcastLoot(ArrayList droplist)
+		{
+			if (droplist.Count > 0)
+			{
+				String lastloot;
+				foreach (GamePlayer player in GetPlayersInRadius(WorldMgr.INFO_DISTANCE))
+				{
+					lastloot = string.Empty;
+					foreach (string str in droplist)
+					{
+						// Suppress identical messages (multiple item drops).
+						if (str != lastloot)
+						{
+							player.Out.SendMessage(String.Format(LanguageMgr.GetTranslation(player.Client.Account.Language, "GameNPC.DropLoot.Drops",
+								GetName(0, true, player.Client.Account.Language, this), str)), eChatType.CT_Loot, eChatLoc.CL_SystemWindow);
+							lastloot = str;
+						}
+					}
+				}
+			}
+		}
 
         public override eGender Gender { get; set; }
 
@@ -4562,11 +4558,11 @@ namespace DOL.GS
 			m_name = "new mob";
 			m_model = 408;
 			MaxSpeedBase = 200;
-			GuildName = "";
+			GuildName = string.Empty;
 			m_size = 50;
 			m_flags = 0;
 			RoamingRange = 0;
-			OwnerID = "";
+			OwnerID = string.Empty;
 			m_spawnPoint = new Point3D();
 			LinkedFactions = new ArrayList(1);
 
@@ -4596,7 +4592,7 @@ namespace DOL.GS
 
 		public virtual double CampBonus { get => m_campBonus; set => m_campBonus = value; }
 		public virtual double MaxHealthScalingFactor => 1.0;
-		public double WeaponSkillScalingFactor { get => weaponSkillScalingFactor; set => weaponSkillScalingFactor = value; }
+		public double DamageFactor { get => damageFactor; set => damageFactor = value; }
 		public int OrbsReward { get => orbsReward; set => orbsReward = value; }
 	}
 }

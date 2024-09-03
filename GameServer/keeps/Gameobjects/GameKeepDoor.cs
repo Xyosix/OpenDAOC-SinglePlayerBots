@@ -209,7 +209,7 @@ namespace DOL.GS.Keeps
 		{
 			get
 			{
-				string name = "";
+				string name = string.Empty;
 
 				if (IsAttackableDoor)
 				{
@@ -543,23 +543,6 @@ namespace DOL.GS.Keeps
 		public override string GetName(int article, bool firstLetterUppercase)
 		{
 			return "the " + base.GetName(article, firstLetterUppercase);
-		}
-
-		/// <summary>
-		/// Starts the power regeneration
-		/// </summary>
-		public override void StartPowerRegeneration()
-		{
-			// No regeneration for doors
-			return;
-		}
-		/// <summary>
-		/// Starts the endurance regeneration
-		/// </summary>
-		public override void StartEnduranceRegeneration()
-		{
-			// No regeneration for doors
-			return;
 		}
 
 		public override void StartHealthRegeneration()

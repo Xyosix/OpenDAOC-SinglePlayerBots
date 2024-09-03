@@ -69,41 +69,31 @@ namespace DOL.GS.Spells
 			MessageToCaster("You prepare a " + Spell.Name, eChatType.CT_YouHit);
 		}
 
-
-		public override int CalculateToHitChance(GameLiving target)
+		public override double CalculateToHitChance(GameLiving target)
 		{
-			int bonustohit = Caster.GetModified(eProperty.ToHitBonus);
-
 			// miss rate is 0 on same level opponent
-			int hitchance = 100 + bonustohit;
+			double hitChance = 100 + Caster.GetModified(eProperty.ToHitBonus);
 
 			if (Caster is not IGamePlayer || target is not IGamePlayer)
 			{
-				hitchance -= (int)(Caster.GetConLevel(target) * ServerProperties.Properties.PVE_SPELL_CONHITPERCENT);
-				hitchance += Math.Max(0, target.attackComponent.Attackers.Count - 1) * ServerProperties.Properties.MISSRATE_REDUCTION_PER_ATTACKERS;
+				// 1.33 per level difference.
+				hitChance += (Caster.EffectiveLevel - target.EffectiveLevel) * (1 + 1 / 3.0);
+				hitChance += Math.Max(0, target.attackComponent.Attackers.Count - 1) * ServerProperties.Properties.MISSRATE_REDUCTION_PER_ATTACKERS;
 			}
 
-			return hitchance;
+			return hitChance;
 		}
 
 		/// <summary>
 		/// Adjust damage based on chance to hit.
 		/// </summary>
-		/// <param name="damage"></param>
-		/// <param name="hitChance"></param>
-		/// <returns></returns>
-		public override int AdjustDamageForHitChance(int damage, int hitChance)
+		public override double AdjustDamageForHitChance(double damage, double hitChance)
 		{
-			int adjustedDamage = damage;
-
 			if (hitChance < 85)
-			{
-				adjustedDamage += (int)(adjustedDamage * (hitChance - 85) * 0.038);
-			}
+				damage *= (hitChance - 85) * 0.038;
 
-			return adjustedDamage;
+			return damage;
 		}
-
 
 		/// <summary>
 		/// Level mod for effect between target and caster if there is any
@@ -267,45 +257,9 @@ namespace DOL.GS.Spells
 			base.FinishSpellCast(target);
 		}
 
-		/// <summary>
-		/// Calculates the effective casting time
-		/// </summary>
-		/// <returns>effective casting time in milliseconds</returns>
 		public override int CalculateCastingTime()
 		{
-			if (Spell.LifeDrainReturn == (int)eShotType.Power) return 6000;
-
-			int ticks = m_spell.CastTime;
-
-			double percent = 1.0;
-			int dex = Caster.GetModified(eProperty.Dexterity);
-
-			if (dex < 60)
-			{
-				//do nothing.
-			}
-			else if (dex < 250)
-			{
-				percent = 1.0 - (dex - 60) * 0.15 * 0.01;
-			}
-			else
-			{
-				percent = 1.0 - ((dex - 60) * 0.15 + (dex - 250) * 0.05) * 0.01;
-			}
-
-			IGamePlayer player = m_caster as IGamePlayer;
-
-			if (player != null)
-			{
-				percent *= 1.0 - m_caster.GetModified(eProperty.CastingSpeed) * 0.01;
-			}
-
-			ticks = (int)(ticks * Math.Max(m_caster.CastingSpeedReductionCap, percent));
-
-			if (ticks < m_caster.MinimumCastingSpeed)
-				ticks = m_caster.MinimumCastingSpeed;
-
-			return ticks;
+			return (eShotType) Spell.LifeDrainReturn is eShotType.Power ? 6000 : base.CalculateCastingTime();
 		}
 
 		public override int PowerCost(GameLiving target) { return 0; }
@@ -332,9 +286,7 @@ namespace DOL.GS.Spells
 
 			if (IsInCastingPhase)
 			{
-				int mod = Caster.GetConLevel(attacker);
 				double chance = 65;
-				chance += mod * 10;
 				chance = Math.Max(1, chance);
 				chance = Math.Min(99, chance);
 				if (attacker is IGamePlayer)
@@ -356,7 +308,7 @@ namespace DOL.GS.Spells
 			get
 			{
 				var list = new List<string>();
-				//list.Add("Function: " + (Spell.SpellType == "" ? "(not implemented)" : Spell.SpellType));
+				//list.Add("Function: " + (Spell.SpellType == string.Empty ? "(not implemented)" : Spell.SpellType));
 				//list.Add(" "); //empty line
 				list.Add(Spell.Description);
 				list.Add(" "); //empty line

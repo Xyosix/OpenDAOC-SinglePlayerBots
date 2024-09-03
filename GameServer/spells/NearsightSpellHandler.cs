@@ -52,33 +52,32 @@ namespace DOL.GS.Spells
         /// </summary>
         /// <param name="target">the target of the spell</param>
         /// <returns>chance that spell will be resisted for specific target</returns>
-        public override int CalculateSpellResistChance(GameLiving target)
+        public override double CalculateSpellResistChance(GameLiving target)
         {
             //Bonedancer rr5
             if (target.EffectList.GetOfType<AllureofDeathEffect>() != null)
             {
                 return AllureofDeathEffect.nschance;
             }
-
             return base.CalculateSpellResistChance(target);
         }
 
-        /// <summary>
-        /// When an applied effect starts
-        /// duration spells only
-        /// </summary>
-        /// <param name="effect"></param>
-        public override void OnEffectStart(GameSpellEffect effect)
-        {
-            //GameSpellEffect mezz = SpellHandler.FindEffectOnTarget(effect.Owner, "Mesmerize");
-            //	if(mezz != null) mezz.Cancel(false);
-            //// percent category
-            //effect.Owner.DebuffCategory[(int)eProperty.ArcheryRange] += (int)Spell.Value;
-            //effect.Owner.DebuffCategory[(int)eProperty.SpellRange] += (int)Spell.Value;
-            //SendEffectAnimation(effect.Owner, 0, false, 1);
-            //MessageToLiving(effect.Owner, Spell.Message1, eChatType.CT_Spell);
-            //Message.SystemToArea(effect.Owner, Util.MakeSentence(Spell.Message2, effect.Owner.GetName(0, false)), eChatType.CT_Spell, effect.Owner);
-        }
+		/// <summary>
+		/// When an applied effect starts
+		/// duration spells only
+		/// </summary>
+		/// <param name="effect"></param>
+		public override void OnEffectStart(GameSpellEffect effect)
+		{
+			//GameSpellEffect mezz = SpellHandler.FindEffectOnTarget(effect.Owner, "Mesmerize");
+ 		//	if(mezz != null) mezz.Cancel(false);
+			//// percent category
+			//effect.Owner.DebuffCategory[(int)eProperty.ArcheryRange] += (int)Spell.Value;
+			//effect.Owner.DebuffCategory[(int)eProperty.SpellRange] += (int)Spell.Value;
+			//SendEffectAnimation(effect.Owner, 0, false, 1);
+			//MessageToLiving(effect.Owner, Spell.Message1, eChatType.CT_Spell);
+			//Message.SystemToArea(effect.Owner, Util.MakeSentence(Spell.Message2, effect.Owner.GetName(0, false)), eChatType.CT_Spell, effect.Owner);
+		}
 
         /// <summary>
         /// When an applied effect expires.
@@ -125,10 +124,10 @@ namespace DOL.GS.Spells
 
                 var list = new List<string>();
 
-                list.Add(LanguageMgr.GetTranslation((Caster as GamePlayer).Client, "NearsightSpellHandler.DelveInfo.Function", (Spell.SpellType.ToString() == "" ? "(not implemented)" : Spell.SpellType.ToString())));
-                list.Add(" "); //empty line
-                list.Add(Spell.Description);
-                list.Add(" "); //empty line
+                list.Add(LanguageMgr.GetTranslation((Caster as GamePlayer).Client, "NearsightSpellHandler.DelveInfo.Function", (Spell.SpellType.ToString() == string.Empty ? "(not implemented)" : Spell.SpellType.ToString())));
+				list.Add(" "); //empty line
+				list.Add(Spell.Description);
+				list.Add(" "); //empty line
                 if (Spell.Damage != 0)
                     list.Add(LanguageMgr.GetTranslation((Caster as GamePlayer).Client, "DelveInfo.Damage", Spell.Damage.ToString("0.###;0.###'%'")));
                 if (Spell.Value != 0)

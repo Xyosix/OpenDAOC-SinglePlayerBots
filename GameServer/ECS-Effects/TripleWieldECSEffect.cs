@@ -68,27 +68,20 @@ namespace DOL.GS
             //if (attackData.IsOffHand) return; // only react to main hand
             if (attackData.Weapon == null) return; // no weapon attack
 
-			int modifier = 100;
 			//double dpsCap = (1.2 + 0.3 * attacker.Level) * 0.7;
 			//double dps = Math.Min(atkArgs.AttackData.Weapon.DPS_AF/10.0, dpsCap);
-			double baseDamage = attackData.Weapon.DPS_AF * attackData.WeaponSpeed * 0.001;
+			double damage = attackData.Weapon.DPS_AF * attackData.Interval * 0.001;
+			double damageResisted = damage * target.GetResist(eDamageType.Body) * -0.01;
 
-			modifier += 25 * attackData.Target.GetConLevel(attackData.Attacker);
-			modifier = Math.Min(300, modifier);
-			modifier = Math.Max(75, modifier);
-
-            double damage = baseDamage * modifier * 0.001; // attack speed is 10 times higher (2.5spd=25)
-            double damageResisted = damage * target.GetResist(eDamageType.Body) * -0.01;
-
-            AttackData ad = new AttackData();
-            ad.Attacker = attacker;
-            ad.Target = target;
-            ad.Damage = (int)(damage + damageResisted);
-            ad.Modifier = (int)damageResisted;
-            ad.DamageType = eDamageType.Body;
-            ad.AttackType = AttackData.eAttackType.MeleeOneHand;
-            ad.AttackResult = eAttackResult.HitUnstyled;
-            ad.WeaponSpeed = attackData.WeaponSpeed;
+			AttackData ad = new AttackData();
+			ad.Attacker = attacker;
+			ad.Target = target;
+			ad.Damage = (int)(damage + damageResisted);
+			ad.Modifier = (int)damageResisted;
+			ad.DamageType = eDamageType.Body;
+			ad.AttackType = AttackData.eAttackType.MeleeOneHand;
+			ad.AttackResult = eAttackResult.HitUnstyled;
+			ad.Interval = attackData.Interval;
 
             GamePlayer owner = attacker as GamePlayer;
             if (owner != null)

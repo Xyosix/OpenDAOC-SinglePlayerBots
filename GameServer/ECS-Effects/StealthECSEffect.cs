@@ -34,6 +34,7 @@ namespace DOL.GS
                 if (gamePlayer.ObjectState == GameObject.eObjectState.Active)
                     gamePlayer.Out.SendMessage(LanguageMgr.GetTranslation(gamePlayer.Client.Account.Language, "GamePlayer.Stealth.NowHidden"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
 
+                
                 gamePlayer.Out.SendPlayerModelTypeChange(OwnerPlayer, 3);
 
                 if (gamePlayer.EffectListComponent.ContainsEffectForEffectType(eEffect.MovementSpeedBuff))
@@ -52,20 +53,14 @@ namespace DOL.GS
 
                 gamePlayer.Sprint(false);
 
-                if (gamePlayer.Client.Account.PrivLevel == 1 || gamePlayer.Client.Account.PrivLevel == 0)
-                {
-                    //GameEventMgr.AddHandler(this, GameLivingEvent.AttackedByEnemy, new DOLEventHandler(Unstealth));
-                    foreach (GamePlayer player in gamePlayer.GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
-                    {
-                        if (player == null || player == gamePlayer)
-                            continue;
+            foreach (GamePlayer player in Owner.GetPlayersInRadius(WorldMgr.VISIBILITY_DISTANCE))
+            {
+                if (player == Owner)
+                    continue;
 
-                        if (!player.CanDetect(gamePlayer))
-                            player.Out.SendObjectDelete((GameObject)gamePlayer);
-                    }
-
-                    gamePlayer.Out.SendUpdateMaxSpeed();
-                }
+                if (!player.CanDetect((IGamePlayer)Owner))
+                    player.Out.SendObjectDelete(Owner);
+            }
 
                 StealthStateChanged();
             }
@@ -139,14 +134,9 @@ namespace DOL.GS
         private void StealthStateChanged()
         {
             if (OwnerPlayer != null)
-            {
                 OwnerPlayer.Notify(GamePlayerEvent.StealthStateChanged, OwnerPlayer, null);
 
-                if (OwnerPlayer.Client.Account.PrivLevel == 1 || OwnerPlayer.Client.Account.PrivLevel == 0)
-                {
-                    OwnerPlayer.Out.SendUpdateMaxSpeed();
-                }
-            }
+            Owner.OnMaxSpeedChange();
         }
     }
 }

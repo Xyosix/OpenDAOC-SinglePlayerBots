@@ -19,14 +19,16 @@ namespace DOL.GS.PlayerClass
             m_baseHP = 720;
         }
 
-        public override bool HasAdvancedFromBaseClass()
-        {
-            return true;
-        }
+		public override bool FocusCaster => false;
+
+		public override bool HasAdvancedFromBaseClass()
+		{
+			return true;
+		}
 
         public override eClassType ClassType
         {
-            get { return eClassType.Hybrid; }
+            get { return eClassType.ListCaster; }
         }
 
         public override List<PlayerRace> EligibleRaces => new List<PlayerRace>()

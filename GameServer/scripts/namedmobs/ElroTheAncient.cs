@@ -12,7 +12,6 @@ namespace DOL.GS.Scripts
 		public ElroTheAncient()
 		{
 			TetherRange = 4500;
-			WeaponSkillScalingFactor = 55;
 		}
 		public override int GetResist(eDamageType damageType)
 		{
@@ -61,7 +60,7 @@ namespace DOL.GS.Scripts
 		public override bool AddToWorld()
 		{
 			this.Name = "Elro the Ancient";
-			this.GuildName = "";
+			this.GuildName = string.Empty;
 			this.Model = 767;
 			this.Size = 150;
 			this.Level = 65;

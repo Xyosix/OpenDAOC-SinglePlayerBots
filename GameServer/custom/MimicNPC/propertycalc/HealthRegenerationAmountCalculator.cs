@@ -1,4 +1,5 @@
 using DOL.GS.PropertyCalc;
+using System;
 
 namespace DOL.GS.Scripts
 {
@@ -27,7 +28,16 @@ namespace DOL.GS.Scripts
               - All health and power regeneration aids are now twice as effective.
              */
 
-            double regen = 5 + living.Level * 0.5;
+            // Reverted 1.87 changes.
+            // From DoL's `living.Level * 0.6` above level 25, `10 + (living.Level * 0.2)` below level 26.
+            // 15 health per tick at level 50 instead of 30.
+            double regen = 2.5 + living.Level * 0.25;
+            int debuff = living.SpecBuffBonusCategory[(int)property];
+
+            if (debuff < 0)
+                debuff = -debuff;
+
+            regen += living.BaseBuffBonusCategory[(int)property] + living.AbilityBonus[(int)property] + living.ItemBonus[(int)property] - debuff;
 
             if (living is GameNPC npc && living is not MimicNPC)
             {
@@ -43,19 +53,7 @@ namespace DOL.GS.Scripts
             }
 
             regen *= ServerProperties.Properties.HEALTH_REGEN_AMOUNT_MODIFIER;
-            regen += living.ItemBonus[(int)property];
-
-            int debuff = living.SpecBuffBonusCategory[(int) property];
-
-            if (debuff < 0)
-                debuff = -debuff;
-
-            regen += living.BaseBuffBonusCategory[(int) property] - debuff;
-
-            if (regen < 1)
-                regen = 1;
-
-            return (int) regen;
+            return Math.Max(1, (int)regen);
         }
     }
 }

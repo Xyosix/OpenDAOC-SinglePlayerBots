@@ -2,7 +2,6 @@ using System;
 using DOL.AI;
 using DOL.AI.Brain;
 using DOL.Database;
-using DOL.Events;
 using DOL.GS.ServerProperties;
 
 namespace DOL.GS
@@ -238,7 +237,9 @@ namespace DOL.GS
 				case eSpellType.DexterityDebuff:
 				case eSpellType.StrengthDebuff:
 				case eSpellType.ArmorFactorDebuff:
-				case eSpellType.ArmorFactorBuff:
+				case eSpellType.BaseArmorFactorBuff:
+				case eSpellType.SpecArmorFactorBuff:
+				case eSpellType.PaladinArmorFactorBuff:
 				case eSpellType.ArmorAbsorptionBuff:
 				case eSpellType.ArmorAbsorptionDebuff:
 				case eSpellType.DexterityQuicknessBuff:
@@ -332,38 +333,9 @@ namespace DOL.GS
 		}
 		#endregion
 
-		#region Melee
-
-		/// <summary>
-		/// Calculate how fast this pet can cast a given spell
-		/// </summary>
-		/// <param name="spell"></param>
-		/// <returns></returns>
-		public override int CalculateCastingTime(SpellLine line, Spell spell)
-		{
-			int ticks = spell.CastTime;
-
-			double percent = DexterityCastTimeReduction;
-			percent -= GetModified(eProperty.CastingSpeed) * .01;
-
-			ticks = (int)(ticks * Math.Max(CastingSpeedReductionCap, percent));
-			if (ticks < MinimumCastingSpeed)
-				ticks = MinimumCastingSpeed;
-
-			return ticks;
-		}
-		#endregion
-
 		public override void Die(GameObject killer)
 		{
-			try
-			{
-				GameEventMgr.Notify(GameLivingEvent.PetReleased, this);
-			}
-			finally
-			{
-				base.Die(killer);
-			}
+			base.Die(killer);
 		}
 
 		/// <summary>

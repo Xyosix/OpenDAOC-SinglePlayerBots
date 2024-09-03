@@ -210,8 +210,7 @@ namespace DOL.AI.Brain
                     continue;
 
                 if (Properties.CHECK_LOS_BEFORE_AGGRO)
-                    // We don't know if the LoS check will be positive, so we have to ask other players
-                    player.Out.SendCheckLos(Body, player, new CheckLosResponse(LosCheckForAggroCallback));
+                    SendLosCheckForAggro(player, player);
                 else
                 {
                     AddToAggroList(player, 1);
@@ -239,9 +238,9 @@ namespace DOL.AI.Brain
                 if (Properties.CHECK_LOS_BEFORE_AGGRO)
                 {
                     // Check LoS if either the target or the current mob is a pet
-                    if (npc.Brain is ControlledMobBrain theirControlledMobBrain && theirControlledMobBrain.GetPlayerOwner() is GamePlayer theirOwner)
+                    if (npc.Brain is ControlledMobBrain theirControlledNpcBrain && theirControlledNpcBrain.GetPlayerOwner() is GamePlayer theirOwner)
                     {
-                        theirOwner.Out.SendCheckLos(Body, npc, new CheckLosResponse(LosCheckForAggroCallback));
+                        SendLosCheckForAggro(theirOwner, npc);
                         continue;
                     }
                 }
@@ -457,6 +456,29 @@ namespace DOL.AI.Brain
                 return false;
 
             return true;
+        }
+
+        public bool SetGuard(GameLiving target, out bool ourEffect)
+        {
+            if (target != null)
+            {
+                GuardAbilityHandler.CheckExistingEffectsOnTarget(Body, target, true, out bool foundOurEffect, out GuardECSGameEffect existingEffectFromAnotherSource);
+
+                ourEffect = foundOurEffect;
+
+                if (foundOurEffect)
+                    return false;
+
+                if (existingEffectFromAnotherSource != null)
+                    return false;
+
+                GuardAbilityHandler.CancelOurEffectThenAddOnTarget(Body, target);
+
+                return true;
+            }
+
+            ourEffect = false;
+            return false;
         }
 
         #endregion AI
@@ -705,7 +727,8 @@ namespace DOL.AI.Brain
         /// </summary>
         public virtual int AggroLevel { get; set; }
 
-        protected ConcurrentDictionary<GameLiving, AggroAmount> AggroList { get; } = new();
+        private ConcurrentDictionary<GameLiving, AggroAmount> _tempAggroList = new();
+        protected ConcurrentDictionary<GameLiving, AggroAmount> AggroList { get; private set; } = new();
         protected List<(GameLiving, long)> OrderedAggroList { get; private set; } = [];
         public GameLiving LastHighestThreatInAttackRange { get; private set; }
 
@@ -738,6 +761,48 @@ namespace DOL.AI.Brain
             if (Body.IsConfused || !Body.IsAlive || living == null)
                 return;
 
+            ForceAddToAggroList(living, aggroAmount);
+        }
+
+        public void ForceAddToAggroList(GameLiving living, long aggroAmount)
+        {
+            if (aggroAmount > 0)
+            {
+                foreach (ProtectECSGameEffect protect in living.effectListComponent.GetAbilityEffects().Where(e => e.EffectType is eEffect.Protect))
+                {
+                    if (protect.Target != living)
+                        continue;
+
+                    GameLiving protectSource = protect.Source;
+
+                    if (protectSource.IsIncapacitated || protectSource.IsSitting)
+                        continue;
+
+                    if (!living.IsWithinRadius(protectSource, ProtectAbilityHandler.PROTECT_DISTANCE))
+                        continue;
+
+                    // P I: prevents 10% of aggro amount
+                    // P II: prevents 20% of aggro amount
+                    // P III: prevents 30% of aggro amount
+                    // guessed percentages, should never be higher than or equal to 50%
+                    int abilityLevel = protectSource.GetAbilityLevel(Abilities.Protect);
+                    long protectAmount = (long)(abilityLevel * 0.1 * aggroAmount);
+
+                    if (protectAmount > 0)
+                    {
+                        aggroAmount -= protectAmount;
+
+                        if (protectSource is GamePlayer playerProtectSource)
+                        {
+                            playerProtectSource.Out.SendMessage(LanguageMgr.GetTranslation(playerProtectSource.Client.Account.Language, "AI.Brain.StandardMobBrain.YouProtDist", living.GetName(0, false),
+                                Body.GetName(0, false, playerProtectSource.Client.Account.Language, Body)), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+                        }
+
+                        AggroList.AddOrUpdate(protectSource, Add, Update, protectAmount);
+                    }
+                }
+            }
+
             AggroList.AddOrUpdate(living, Add, Update, aggroAmount);
 
             if (living is IGamePlayer player)
@@ -751,7 +816,13 @@ namespace DOL.AI.Brain
                             AggroList.TryAdd((GameLiving)playerInGroup, new());
                     }
                 }
+            }
 
+            // Change state and reschedule the next think tick to improve responsiveness.
+            if (FSM.GetCurrentState() != FSM.GetState(eFSMStateType.AGGRO) && HasAggro)
+            {
+                FSM.SetCurrentState(eFSMStateType.AGGRO);
+                NextThinkTick = GameLoop.GameLoopTime;
             }
 
             static AggroAmount Add(GameLiving key, long arg)
@@ -776,15 +847,45 @@ namespace DOL.AI.Brain
             // Potentially slow, so we cache the result.
             lock (((ICollection)OrderedAggroList).SyncRoot)
             {
-                if (OrderedAggroList.Count == 0)
+                if (OrderedAggroList.Any())
                     OrderedAggroList = AggroList.OrderByDescending(x => x.Value.Effective).Select(x => (x.Key, x.Value.Effective)).ToList();
 
                 return OrderedAggroList.ToList();
             }
         }
+
         public long GetBaseAggroAmount(GameLiving living)
         {
             return AggroList.TryGetValue(living, out AggroAmount aggroAmount) ? aggroAmount.Base : 0;
+        }
+
+        public bool SetTemporaryAggroList()
+        {
+            if (_tempAggroList != null)
+                return false;
+
+            _tempAggroList = AggroList;
+            AggroList = new();
+            return true;
+        }
+
+        public bool UnsetTemporaryAggroList()
+        {
+            if (_tempAggroList == null)
+                return false;
+
+            AggroList = _tempAggroList;
+            _tempAggroList = null;
+
+            if (HasAggro)
+            {
+                if (FSM.GetCurrentState() != FSM.GetState(eFSMStateType.AGGRO))
+                    FSM.SetCurrentState(eFSMStateType.AGGRO);
+
+                NextThinkTick = GameLoop.GameLoopTime;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -828,7 +929,7 @@ namespace DOL.AI.Brain
                     if (Body.ControlledBrain != null)
                         Body.ControlledBrain.Attack(Body.TargetObject);
 
-                    if (MimicBody.CharacterClass.ClassType == eClassType.ListCaster)
+                    if (MimicBody.CharacterClass.ClassType == eClassType.ListCaster && MimicBody.CharacterClass.ID != (int)eCharacterClass.Valewalker)
                     {
                         ECSGameAbilityEffect quickCast = EffectListService.GetAbilityEffectOnTarget(Body, eEffect.QuickCast);
 
@@ -1039,14 +1140,23 @@ namespace DOL.AI.Brain
         }
 
         private long _isHandlingAdditionToAggroListFromLosCheck;
+        private int _losCheckCount;
         private bool StartAddToAggroListFromLosCheck => Interlocked.Exchange(ref _isHandlingAdditionToAggroListFromLosCheck, 1) == 0; // Returns true the first time it's called.
+        private bool IsWaitingForLosCheck => Interlocked.CompareExchange(ref _losCheckCount, 0, 0) > 0;
+        protected virtual bool CanAddToAggroListFromMultipleLosChecks => false;
 
+        protected void SendLosCheckForAggro(GamePlayer player, GameObject target)
+        {
+            if (player.Out.SendCheckLos(Body, target, new CheckLosResponse(LosCheckForAggroCallback)))
+                Interlocked.Increment(ref _losCheckCount);
+        }
 
-        protected virtual void LosCheckForAggroCallback(GamePlayer player, eLosCheckResponse response, ushort sourceOID, ushort targetOID)
+        protected void LosCheckForAggroCallback(GamePlayer player, eLosCheckResponse response, ushort sourceOID, ushort targetOID)
         {
             // Make sure only one thread can enter this block to prevent multiple entities from being added to the aggro list.
             // Otherwise mobs could kill one player and immediately go for another one.
-            if (response is eLosCheckResponse.TRUE && StartAddToAggroListFromLosCheck)
+            // This method should not be allowed to be executed at the same time as `CheckPlayerAggro` or `CheckNPCAggro`.
+            if (response is eLosCheckResponse.TRUE && (CanAddToAggroListFromMultipleLosChecks || StartAddToAggroListFromLosCheck))
             {
                 if (!HasAggro)
                 {
@@ -1058,6 +1168,8 @@ namespace DOL.AI.Brain
 
                 _isHandlingAdditionToAggroListFromLosCheck = 0;
             }
+
+            Interlocked.Decrement(ref _losCheckCount);
         }
 
         protected virtual bool ShouldBeRemovedFromAggroList(GameLiving living)
@@ -1065,11 +1177,9 @@ namespace DOL.AI.Brain
             // Keep Necromancer shades so that we can attack them if their pets die.
             return !living.IsAlive ||
                    living.ObjectState != GameObject.eObjectState.Active ||
-                   living.IsStealthed ||
                    living.CurrentRegion != Body.CurrentRegion ||
                    !Body.IsWithinRadius(living, MAX_AGGRO_LIST_DISTANCE) ||
                    (!GameServer.ServerRules.IsAllowedToAttack(Body, living, true) && !living.effectListComponent.ContainsEffectForEffectType(eEffect.Shade));
-
         }
 
         protected virtual bool ShouldBeIgnoredFromAggroList(GameLiving living)
@@ -1079,7 +1189,6 @@ namespace DOL.AI.Brain
         }
 
         protected virtual GameLiving CleanUpAggroListAndGetHighestModifiedThreat()
-
         {
             // Clear cached ordered aggro list.
             // It isn't built here because ordering all entities in the aggro list can be expensive, and we typically don't need it.
@@ -1188,19 +1297,11 @@ namespace DOL.AI.Brain
 
         public virtual void OnAttackedByEnemy(AttackData ad)
         {
-            if (!Body.IsAlive || Body.ObjectState != GameObject.eObjectState.Active)
+            if (!Body.IsAlive || Body.ObjectState != GameObject.eObjectState.Active || FSM.GetCurrentState() == FSM.GetState(eFSMStateType.PASSIVE))
                 return;
 
-            if (FSM.GetCurrentState() == FSM.GetState(eFSMStateType.PASSIVE))
-                return;
-
-            ConvertDamageToAggroAmount(ad.Attacker, Math.Max(1, ad.Damage + ad.CriticalDamage));
-
-            if (!Body.attackComponent.AttackState && FSM.GetCurrentState() != FSM.GetState(eFSMStateType.AGGRO))
-            {
-                FSM.SetCurrentState(eFSMStateType.AGGRO);
-                Think();
-            }
+            if (ad.GeneratesAggro)
+                ConvertDamageToAggroAmount(ad.Attacker, Math.Max(1, ad.Damage + ad.CriticalDamage));
         }
 
         /// <summary>
@@ -1440,16 +1541,19 @@ namespace DOL.AI.Brain
 
                 if (spellsToCast.Count < 1)
                 {
-                    foreach (Spell spell in Body.Spells)
+                    if (Body.CanCastHarmfulSpells)
                     {
-                        if (spell.SpellType == eSpellType.Charm ||
-                            spell.SpellType == eSpellType.Amnesia ||
-                            spell.SpellType == eSpellType.Confusion ||
-                            spell.SpellType == eSpellType.Taunt)
-                            continue;
+                        foreach (Spell spell in Body.HarmfulSpells)
+                        {
+                            if (spell.SpellType == eSpellType.Charm ||
+                                spell.SpellType == eSpellType.Amnesia ||
+                                spell.SpellType == eSpellType.Confusion ||
+                                spell.SpellType == eSpellType.Taunt)
+                                continue;
 
-                        if (CanCastOffensiveSpell(spell))
-                            spellsToCast.Add(spell);
+                            if (CanCastOffensiveSpell(spell))
+                                spellsToCast.Add(spell);
+                        }
                     }
                 }
 
@@ -1773,7 +1877,9 @@ namespace DOL.AI.Brain
                 case eSpellType.AcuityBuff:
                 case eSpellType.AFHitsBuff:
                 case eSpellType.ArmorAbsorptionBuff:
-                case eSpellType.ArmorFactorBuff:
+                case eSpellType.BaseArmorFactorBuff:
+                case eSpellType.SpecArmorFactorBuff:
+                case eSpellType.PaladinArmorFactorBuff:
                 case eSpellType.Buff:
                 case eSpellType.CelerityBuff:
                 case eSpellType.ConstitutionBuff:
@@ -1791,7 +1897,6 @@ namespace DOL.AI.Brain
                 case eSpellType.MagicResistBuff:
                 case eSpellType.MeleeDamageBuff:
                 case eSpellType.MLABSBuff:
-                case eSpellType.PaladinArmorFactorBuff:
                 case eSpellType.ParryBuff:
                 case eSpellType.PowerHealthEnduranceRegenBuff:
                 case eSpellType.StrengthBuff:
@@ -2085,7 +2190,7 @@ namespace DOL.AI.Brain
 
                 case eSpellType.CombatHeal:
                 case eSpellType.DamageAdd:
-                case eSpellType.ArmorFactorBuff:
+                case eSpellType.PaladinArmorFactorBuff:
                 case eSpellType.DexterityQuicknessBuff:
                 case eSpellType.EnduranceRegenBuff:
                 case eSpellType.CombatSpeedBuff:
@@ -2120,8 +2225,7 @@ namespace DOL.AI.Brain
             if (spell.HasRecastDelay && Body.GetSkillDisabledDuration(spell) > 0)
                 return false;
 
-            GameObject lastTarget = Body.TargetObject;
-            Body.TargetObject = null;
+            bool castSpell = false;
 
             switch (spell.SpellType)
             {
@@ -2130,7 +2234,7 @@ namespace DOL.AI.Brain
                 case eSpellType.Taunt:
 
                 if (Body.Group?.MimicGroup.MainTank == Body)
-                    Body.TargetObject = lastTarget;
+                    castSpell = true;
 
                 break;
 
@@ -2152,20 +2256,18 @@ namespace DOL.AI.Brain
                 case eSpellType.Mez:
                 case eSpellType.Mesmerize:
 
-                if (spell.IsPBAoE && !Body.IsWithinRadius(lastTarget, spell.Radius))
+                if (spell.IsPBAoE && !Body.IsWithinRadius(Body.TargetObject, spell.Radius))
                     break;
 
                 // Try to limit the debuffs cast to save mana and time spent doing so.
-                if (spell.IsInstantCast && MimicBody.CharacterClass.ClassType == eClassType.ListCaster)
+                if (MimicBody.CharacterClass.ClassType == eClassType.ListCaster)
                 {
-                    if (!Util.Chance(25))
+                    if (!Util.Chance(Math.Max(5, Body.ManaPercent - 75)))
                         break;
                 }
 
-                if (!LivingHasEffect(lastTarget as GameLiving, spell))
-                {
-                    Body.TargetObject = lastTarget;
-                }
+                if (!LivingHasEffect((GameLiving)Body.TargetObject, spell) && Body.IsWithinRadius(Body.TargetObject, spell.Range))
+                    castSpell = true;
 
                 break;
 
@@ -2177,14 +2279,12 @@ namespace DOL.AI.Brain
             if (pulseEffect != null)
                 return false;
 
-            if (Body.TargetObject != null && (spell.Duration == 0 || (Body.TargetObject is GameLiving living && !(LivingHasEffect(living, spell)))))
+            if (castSpell)
             {
-                Body.CastSpell(spell, m_mobSpellLine, true);
-                Body.TargetObject = lastTarget;
+                Body.CastSpell(spell, m_mobSpellLine);
                 return true;
             }
 
-            Body.TargetObject = lastTarget;
             return false;
         }
 
@@ -2240,7 +2340,7 @@ namespace DOL.AI.Brain
             if (target == null)
                 return true;
 
-            eEffect spellEffect = EffectService.GetEffectFromSpell(spell, m_mobSpellLine.IsBaseLine);
+            eEffect spellEffect = EffectService.GetEffectFromSpell(spell);
 
             // Ignore effects that aren't actually effects (may be incomplete).
             if (spellEffect is eEffect.DirectDamage or eEffect.Pet or eEffect.Unknown)
@@ -2263,7 +2363,7 @@ namespace DOL.AI.Brain
             // May not be the right place for that, but without that check NPCs with more than one offensive or defensive proc will only buff themselves once.
             if (spell.SpellType is eSpellType.OffensiveProc or eSpellType.DefensiveProc)
             {
-                if (target.effectListComponent.Effects.TryGetValue(EffectService.GetEffectFromSpell(spell, m_mobSpellLine.IsBaseLine), out List<ECSGameEffect> existingEffects))
+                if (target.effectListComponent.Effects.TryGetValue(EffectService.GetEffectFromSpell(spell), out List<ECSGameEffect> existingEffects))
                 {
                     if (existingEffects.FirstOrDefault(e => e.SpellHandler.Spell.ID == spell.ID || (spell.EffectGroup > 0 && e.SpellHandler.Spell.EffectGroup == spell.EffectGroup)) != null)
                         return true;
@@ -2283,7 +2383,7 @@ namespace DOL.AI.Brain
 
             bool HasImmunityEffect(eEffect immunityEffect)
             {
-                return immunityEffect != eEffect.Unknown && EffectListService.GetEffectOnTarget(target, immunityEffect) != null;
+                return immunityEffect is not eEffect.Unknown && EffectListService.GetEffectOnTarget(target, immunityEffect) != null;
             }
         }
 

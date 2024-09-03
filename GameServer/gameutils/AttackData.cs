@@ -17,7 +17,7 @@ namespace DOL.GS
         public int CriticalDamage { get; set; }
         public int StyleDamage { get; set; }
         public DbInventoryItem Weapon { get; set; }
-        public int WeaponSpeed { get; set; }
+        public int Interval { get; set; }
         public bool IsOffHand { get; set; }
         public Style Style { get; set; }
         public List<ISpellHandler> StyleEffects { get; set; } = [];
@@ -26,6 +26,7 @@ namespace DOL.GS
         public double EvadeChance { get; set; }
         public double BlockChance { get; set; }
         public double MissChance { get; set; }
+        public double DefensePenetration { get; set; }
         public eArmorSlot ArmorHitLocation { get; set; } = eArmorSlot.NOTSET;
         public ISpellHandler SpellHandler { get; set; }
         public bool IsSpellResisted { get; set; }

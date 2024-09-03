@@ -23,6 +23,7 @@ using System.Linq;
 using System.Reflection;
 using DOL.Database;
 using DOL.GS.PacketHandler;
+using DOL.GS.Scripts;
 using log4net;
 
 namespace DOL.GS.Keeps
@@ -68,10 +69,10 @@ namespace DOL.GS.Keeps
 		Dictionary<eRealm, int> GetTowerCountFromZones(List<int> zones);
 		int GetKeepCountByRealm(eRealm realm);
 		ICollection<AbstractGameKeep> GetAllKeeps();
-		bool IsEnemy(AbstractGameKeep keep, GamePlayer target, bool checkGroup);
+		bool IsEnemy(AbstractGameKeep keep, IGamePlayer target, bool checkGroup);
 		bool IsEnemy(AbstractGameKeep keep, GamePlayer target);
 		bool IsEnemy(GameKeepGuard checker, GamePlayer target);
-		bool IsEnemy(GameKeepGuard checker, GamePlayer target, bool checkGroup);
+		bool IsEnemy(GameKeepGuard checker, IGamePlayer target, bool checkGroup);
 		bool IsEnemy(GameKeepDoor checker, GamePlayer target);
 		bool IsEnemy(GameKeepComponent checker, GamePlayer target);
 		byte GetHeightFromLevel(byte level);

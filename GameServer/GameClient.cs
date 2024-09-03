@@ -183,7 +183,7 @@ namespace DOL.GS
 		/// <summary>
 		/// Holds the time of the last UDP ping
 		/// </summary>
-		protected string m_localIP = "";
+		protected string m_localIP = string.Empty;
 
 		/// <summary>
 		/// The packetsender of this client
@@ -345,10 +345,9 @@ namespace DOL.GS
 			set
 			{
 				GamePlayer oldPlayer = Interlocked.Exchange(ref m_player, value);
-				if (oldPlayer != null)
-				{
+
+				if (oldPlayer != null && oldPlayer.ObjectState is not GameObject.eObjectState.Deleted)
 					oldPlayer.Delete();
-				}
 
 				GameEventMgr.Notify(GameClientEvent.PlayerLoaded, this); // hmm seems not right
 			}
@@ -440,7 +439,7 @@ namespace DOL.GS
 			set { m_clientType = value; }
 		}
 
-		public string MinorRev = "";
+		public string MinorRev = string.Empty;
 		public byte MajorBuild = 0;
 		public byte MinorBuild = 0;
 

@@ -75,7 +75,7 @@ namespace DOL.GS.Scripts
                         speed *= 1.25; // New run speed is 125% when no buff.
                 }
 
-                if (player.IsOverencumbered && player.Client.Account.PrivLevel < 2 && ServerProperties.Properties.ENABLE_ENCUMBERANCE_SPEED_LOSS)
+                if (player.IsOverencumbered && player.Client.Account.PrivLevel == 1 && ServerProperties.Properties.ENABLE_ENCUMBERANCE_SPEED_LOSS)
                 {
                     double Enc = player.Encumberance; // Calculating player.Encumberance is a bit slow with all those locks, don't call it much.
 
@@ -89,7 +89,8 @@ namespace DOL.GS.Scripts
                     else
                         player.IsOverencumbered = false;
                 }
-                if (player.IsStealthed)
+
+                if (player.IsStealthed && player.Client.Account.PrivLevel == 1)
                 {
                     AtlasOF_MasteryOfStealth mos = player.GetAbility<AtlasOF_MasteryOfStealth>();
                     //GameSpellEffect bloodrage = SpellHandler.FindEffectOnTarget(player, "BloodRage");

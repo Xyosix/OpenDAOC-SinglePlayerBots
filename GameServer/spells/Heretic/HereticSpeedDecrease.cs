@@ -18,18 +18,6 @@ namespace DOL.GS.Spells
 			base.FinishSpellCast(target);
 		}
 
-		/// <summary>
-        /// Determines wether this spell is better than given one
-		/// </summary>
-		/// <param name="oldeffect"></param>
-		/// <param name="neweffect"></param>
-		/// <returns></returns>
-		public override bool IsNewEffectBetter(GameSpellEffect oldeffect, GameSpellEffect neweffect)
-		{
-			if (oldeffect.Owner is GamePlayer) return false; //no overwrite for players
-			return base.IsNewEffectBetter(oldeffect, neweffect);
-		}
-
 		public override void ApplyEffectOnTarget(GameLiving target)
 		{
 			if (target.Realm == 0 || Caster.Realm == 0)
@@ -47,7 +35,7 @@ namespace DOL.GS.Spells
                 MessageToCaster(target.Name + " is immune to this effect!", eChatType.CT_SpellResisted);
                 return;
             }
-            if (target.TempProperties.GetProperty("Charging", false))
+            if (target.TempProperties.GetProperty<bool>("Charging"))
             {
                 MessageToCaster(target.Name + " is moving to fast for this spell to have any effect!", eChatType.CT_SpellResisted);
                 return;
@@ -125,7 +113,7 @@ namespace DOL.GS.Spells
 		{
 			base.OnEffectExpires(effect,noMessages);
 
-			ECSGameTimer timer = effect.Owner.TempProperties.GetProperty<ECSGameTimer>(EFFECT_PROPERTY, null);
+			ECSGameTimer timer = effect.Owner.TempProperties.GetProperty<ECSGameTimer>(EFFECT_PROPERTY);
 			effect.Owner.TempProperties.RemoveProperty(EFFECT_PROPERTY);
 			timer.Stop();
 

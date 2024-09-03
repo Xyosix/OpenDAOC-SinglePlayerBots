@@ -15,7 +15,7 @@ namespace DOL.GS
 
         public GameEpicBoss() : base()
         {
-            WeaponSkillScalingFactor = 80;
+            DamageFactor = 2.25;
             ArmorFactorScalingFactor = DefaultArmorFactorScalingFactor;
             OrbsReward = Properties.EPICBOSS_ORBS;
         }
@@ -74,7 +74,7 @@ namespace DOL.GS
                 
                 var achievementMob = Regex.Replace(Name, @"\s+", "");
                 
-                var killerBG = playerKiller?.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY, null);
+                var killerBG = playerKiller?.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY);
                 
                 if (killerBG != null)
                 {

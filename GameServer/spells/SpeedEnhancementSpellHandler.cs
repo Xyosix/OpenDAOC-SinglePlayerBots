@@ -54,8 +54,8 @@ namespace DOL.GS.Spells
 			if (target.EffectList.GetOfType<ChargeEffect>() != null)
 				return;
 
-            if (target.TempProperties.GetProperty("Charging", false))
-                return;
+			if (target.TempProperties.GetProperty<bool>("Charging"))
+				return;
 
             if (target.EffectList.GetOfType<ArmsLengthEffect>() != null)
                 return;

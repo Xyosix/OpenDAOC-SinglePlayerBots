@@ -81,7 +81,7 @@ namespace DOL.GS.Spells
             decoy.X = caster.X;
             decoy.Y = caster.Y;
             decoy.Z = caster.Z;
-            string TemplateId = "";
+            string TemplateId = string.Empty;
             switch (caster.Realm)
             {
                 case eRealm.Albion:
@@ -108,7 +108,7 @@ namespace DOL.GS.Spells
                 decoy.BroadcastLivingEquipmentUpdate();
             }
             decoy.MaxSpeedBase = 0;
-            decoy.GuildName = "";
+            decoy.GuildName = string.Empty;
         }
     }
     #endregion
@@ -240,7 +240,7 @@ namespace DOL.GS.Spells
     {
         // constructor
         public Spymaster6DotHandler(GameLiving caster, Spell spell, SpellLine line) : base(caster, spell, line) { }
-        public override int CalculateSpellResistChance(GameLiving target) { return 0; }
+        public override double CalculateSpellResistChance(GameLiving target) { return 0; }
         protected override GameSpellEffect CreateSpellEffect(GameLiving target, double effectiveness)
         {
             return new GameSpellEffect(this, m_spell.Duration, m_spellLine.IsBaseLine ? 5000 : 4000, effectiveness);

@@ -32,7 +32,7 @@ namespace DOL.GS.PacketHandler.Client.v168
 			uint extraId = packet.ReadInt();
 			ushort objectId = packet.ReadShort();
 
-			string caption = "";
+			string caption = string.Empty;
 			var objectInfo = new List<string>();
 
 			/*
@@ -83,10 +83,10 @@ namespace DOL.GS.PacketHandler.Client.v168
 						}
 						else if (objectType == 10)
 						{
-							List<DbInventoryItem> list = client.Player.TempProperties.GetProperty<List<DbInventoryItem>>(MarketExplorer.EXPLORER_ITEM_LIST, null);
+							List<DbInventoryItem> list = client.Player.TempProperties.GetProperty<List<DbInventoryItem>>(MarketExplorer.EXPLORER_ITEM_LIST);
 							if (list == null)
 							{
-								list = client.Player.TempProperties.GetProperty<List<DbInventoryItem>>("TempSearchKey", null);
+								list = client.Player.TempProperties.GetProperty<List<DbInventoryItem>>("TempSearchKey");
 								if (list == null)
 									return;
 							}
@@ -771,7 +771,7 @@ namespace DOL.GS.PacketHandler.Client.v168
 						if (invItem == null)
 							return;
 
-						ChatGroup mychatgroup = client.Player.TempProperties.GetProperty<ChatGroup>(ChatGroup.CHATGROUP_PROPERTY, null);
+						ChatGroup mychatgroup = client.Player.TempProperties.GetProperty<ChatGroup>(ChatGroup.CHATGROUP_PROPERTY);
 						if (mychatgroup == null)
 						{
 							client.Player.Out.SendMessage(LanguageMgr.GetTranslation(client.Account.Language, "DetailDisplayHandler.HandlePacket.MustBeInChatGroup"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
@@ -876,7 +876,7 @@ namespace DOL.GS.PacketHandler.Client.v168
 						invItem = client.Player.Inventory.GetItem((eInventorySlot)objectId);
 						if (invItem == null) return;
 
-						BattleGroup mybattlegroup = client.Player.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY, null);
+						BattleGroup mybattlegroup = client.Player.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY);
 						if (mybattlegroup == null)
 						{
 							client.Player.Out.SendMessage(LanguageMgr.GetTranslation(client.Account.Language, "DetailDisplayHandler.HandlePacket.MustBeInBattleGroup"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
@@ -1433,7 +1433,7 @@ namespace DOL.GS.PacketHandler.Client.v168
 				#region Proc1
 				if (item.ProcSpellID != 0)
 				{
-					string spellNote = "";
+					string spellNote = string.Empty;
 					output.Add(LanguageMgr.GetTranslation(client.Account.Language, "DetailDisplayHandler.WriteMagicalBonuses.MagicAbility"));
 					if (GlobalConstants.IsWeapon(item.Object_Type))
 					{
@@ -1472,7 +1472,7 @@ namespace DOL.GS.PacketHandler.Client.v168
 				#region Proc2
 				if (item.ProcSpellID1 != 0)
 				{
-					string spellNote = "";
+					string spellNote = string.Empty;
 					output.Add(LanguageMgr.GetTranslation(client.Account.Language, "DetailDisplayHandler.WriteMagicalBonuses.MagicAbility"));
 					if (GlobalConstants.IsWeapon(item.Object_Type))
 					{
@@ -1773,7 +1773,7 @@ namespace DOL.GS.PacketHandler.Client.v168
 				list.Add(" ");
 				list.Add(LanguageMgr.GetTranslation(client.Account.Language, "DetailDisplayHandler.WriteHorseInfo.Summon"));
 				list.Add(" ");
-				list.Add(LanguageMgr.GetTranslation(client.Account.Language, "DetailDisplayHandler.WriteHorseInfo.Name", ((horseName == null || horseName == "") ? "None" : horseName)));
+				list.Add(LanguageMgr.GetTranslation(client.Account.Language, "DetailDisplayHandler.WriteHorseInfo.Name", ((horseName == null || horseName == string.Empty) ? "None" : horseName)));
 				list.Add(LanguageMgr.GetTranslation(client.Account.Language, "DetailDisplayHandler.WriteHorseInfo.NameMount"));
 			}
 			list.Add(" ");
@@ -2184,9 +2184,9 @@ namespace DOL.GS.PacketHandler.Client.v168
 				Style style2 = SkillBase.GetStyleByID(style.OpeningRequirementValue);
 				if (style2!=null)
 					return style2.Name;
-				return "";
+				return string.Empty;
 			}
-			return "";
+			return string.Empty;
 		}*/
 
 		#endregion

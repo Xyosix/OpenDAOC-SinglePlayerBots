@@ -175,7 +175,7 @@ namespace DOL.GS.Commands
 				string message;
 
 				// Use this to aid in debugging social window commands
-				//string debugArgs = "";
+				//string debugArgs = string.Empty;
 				//foreach (string arg in args)
 				//{
 				//    debugArgs += arg + " ";
@@ -456,7 +456,7 @@ namespace DOL.GS.Commands
 
 							object obj = null;
 							string playername = args[2];
-							if (playername == "")
+							if (playername == string.Empty)
 								obj = client.Player.TargetObject as GamePlayer;
 							else
 							{
@@ -469,9 +469,9 @@ namespace DOL.GS.Commands
 								return;
 							}
 
-							string guildId = "";
+							string guildId = string.Empty;
 							ushort guildRank = 9;
-							string plyName = "";
+							string plyName = string.Empty;
 							GamePlayer ply = obj as GamePlayer;
 							DbCoreCharacter ch = obj as DbCoreCharacter;
 							if (obj is GamePlayer)
@@ -501,7 +501,7 @@ namespace DOL.GS.Commands
 								client.Player.Guild.RemovePlayer(client.Player.Name, ply);
 							else
 							{
-								ch.GuildID = "";
+								ch.GuildID = string.Empty;
 								ch.GuildRank = 9;
 								GameServer.Database.SaveObject(ch);
 							}
@@ -540,16 +540,16 @@ namespace DOL.GS.Commands
 							if (chs.Count > 0)
 							{
 								GameClient myclient = ClientService.GetClientFromAccountName(accountName);
-								string plys = "";
+								string plys = string.Empty;
 								bool isOnline = (myclient != null);
 								foreach (DbCoreCharacter ch in chs)
 								{
-									plys += (plys != "" ? "," : "") + ch.Name;
+									plys += (plys != string.Empty ? "," : "") + ch.Name;
 									if (isOnline && ch.Name == myclient.Player.Name)
 										client.Player.Guild.RemovePlayer(client.Player.Name, myclient.Player);
 									else
 									{
-										ch.GuildID = "";
+										ch.GuildID = string.Empty;
 										ch.GuildRank = 9;
 										GameServer.Database.SaveObject(ch);
 									}
@@ -1325,8 +1325,8 @@ namespace DOL.GS.Commands
 								return;
 							}
 							//First Check Routines, GuildIDControl search for player or character.
-							string guildId = "";
-							string plyName = "";
+							string guildId = string.Empty;
+							string plyName = string.Empty;
 							ushort currentTargetGuildRank = 9;
 							GamePlayer ply = obj as GamePlayer;
 							DbCoreCharacter ch = obj as DbCoreCharacter;
@@ -1483,9 +1483,9 @@ namespace DOL.GS.Commands
 								return;
 							}
 
-							string guildId = "";
+							string guildId = string.Empty;
 							ushort guildRank = 1;
-							string plyName = "";
+							string plyName = string.Empty;
 							GamePlayer ply = obj as GamePlayer;
 							DbCoreCharacter ch = obj as DbCoreCharacter;
 							if (obj is GamePlayer)
@@ -1757,7 +1757,7 @@ namespace DOL.GS.Commands
 							{
 								//#warning how can player name  !=  account if args[3] = account ?
 								string playername = args[3];
-								string accountId = "";
+								string accountId = string.Empty;
 
 								GamePlayer targetPlayer = ClientService.GetPlayerByPartialName(args[3], out _);
 								if (targetPlayer != null)
@@ -1783,7 +1783,7 @@ namespace DOL.GS.Commands
 
 								foreach (DbCoreCharacter ply in chars)
 								{
-									ply.GuildID = "";
+									ply.GuildID = string.Empty;
 									ply.GuildRank = 0;
 								}
 								GameServer.Database.SaveObject(chars);
@@ -1812,7 +1812,7 @@ namespace DOL.GS.Commands
 									}
 									else
 									{
-										c.GuildID = "";
+										c.GuildID = string.Empty;
 										c.GuildRank = 0;
 										GameServer.Database.SaveObject(c);
 									}
@@ -2074,7 +2074,7 @@ namespace DOL.GS.Commands
 								client.Out.SendMessage(LanguageMgr.GetTranslation(client.Account.Language, "Scripts.Player.Guild.NoPlayerSelected"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
 								return;
 							}
-							GamePlayer inviter = client.Player.TempProperties.GetProperty<GamePlayer>("allianceinvite", null);
+							GamePlayer inviter = client.Player.TempProperties.GetProperty<GamePlayer>("allianceinvite");
 							if (inviter == client.Player)
 								obj.TempProperties.RemoveProperty("allianceinvite");
 							client.Out.SendMessage(LanguageMgr.GetTranslation(client.Account.Language, "Scripts.Player.Guild.AllianceAnsCancel"), eChatType.CT_Guild, eChatLoc.CL_SystemWindow);
@@ -2098,7 +2098,7 @@ namespace DOL.GS.Commands
 								client.Out.SendMessage(LanguageMgr.GetTranslation(client.Account.Language, "Scripts.Player.Guild.NoPrivilages"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
 								return;
 							}
-							GamePlayer inviter = client.Player.TempProperties.GetProperty<GamePlayer>("allianceinvite", null);
+							GamePlayer inviter = client.Player.TempProperties.GetProperty<GamePlayer>("allianceinvite");
 							client.Player.TempProperties.RemoveProperty("allianceinvite");
 							client.Out.SendMessage(LanguageMgr.GetTranslation(client.Account.Language, "Scripts.Player.Guild.AllianceDeclined"), eChatType.CT_Guild, eChatLoc.CL_SystemWindow);
 							inviter.Out.SendMessage(LanguageMgr.GetTranslation(client.Account.Language, "Scripts.Player.Guild.AllianceDeclinedOther"), eChatType.CT_Guild, eChatLoc.CL_SystemWindow);
@@ -2573,7 +2573,7 @@ namespace DOL.GS.Commands
 			if (response != 0x01)
 				return;
 
-			long bannerPrice = player.TempProperties.GetProperty<long>(GUILD_BANNER_PRICE, 0);
+			long bannerPrice = player.TempProperties.GetProperty<long>(GUILD_BANNER_PRICE);
 			player.TempProperties.RemoveProperty(GUILD_BANNER_PRICE);
 
 			if (bannerPrice == 0 || player.Guild.GuildBanner)
@@ -2601,7 +2601,7 @@ namespace DOL.GS.Commands
 			if (response != 0x01)
 				return;
 
-			Guild.eBonusType buffType = player.TempProperties.GetProperty<Guild.eBonusType>(GUILD_BUFF_TYPE, Guild.eBonusType.None);
+			Guild.eBonusType buffType = player.TempProperties.GetProperty(GUILD_BUFF_TYPE, Guild.eBonusType.None);
 			player.TempProperties.RemoveProperty(GUILD_BUFF_TYPE);
 
 			if (buffType == Guild.eBonusType.None || player.Guild.MeritPoints < 1000 || player.Guild.BonusType != Guild.eBonusType.None)
@@ -2634,7 +2634,7 @@ namespace DOL.GS.Commands
 			if (reponse != 0x01)
 				return; //declined
 
-			GamePlayer inviter = player.TempProperties.GetProperty<GamePlayer>("allianceinvite", null);
+			GamePlayer inviter = player.TempProperties.GetProperty<GamePlayer>("allianceinvite");
 
 			if (player.Guild == null)
 			{
@@ -2662,7 +2662,7 @@ namespace DOL.GS.Commands
 				dballi.AllianceName = inviter.Guild.Name;
 				dballi.LeaderGuildID = inviter.GuildID;
 				dballi.DBguildleader = null;
-				dballi.Motd = "";
+				dballi.Motd = string.Empty;
 				alli.Dballiance = dballi;
 				alli.Guilds.Add(inviter.Guild);
 				inviter.Guild.alliance = alli;
@@ -3060,7 +3060,7 @@ namespace DOL.GS.Commands
 			else
 			{
 				// try to recall last setting
-				showOffline = client.Player.TempProperties.GetProperty<bool>("SOCIALSHOWOFFLINE", false);
+				showOffline = client.Player.TempProperties.GetProperty<bool>("SOCIALSHOWOFFLINE");
 			}
 
 			client.Player.TempProperties.SetProperty("SOCIALSHOWOFFLINE", showOffline);

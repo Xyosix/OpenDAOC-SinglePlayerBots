@@ -415,72 +415,52 @@ namespace DOL.GS
             return attackComponent.AttackSpeed(mainWeapon, leftWeapon);
         }
 
-        /// <summary>
-        /// Minimum reduction possible to spell casting speed (CastTime * CastingSpeedCap)
-        /// </summary>
-        public virtual double CastingSpeedReductionCap
-        {
-            get { return 0.4; }
-        }
+		/// <summary>
+		/// Can this living cast while attacking?
+		/// </summary>
+		public virtual bool CanCastWhileAttacking()
+		{
+			return false;
+		}
 
-        /// <summary>
-        /// Minimum casting speed allowed, in ticks (milliseconds)
-        /// </summary>
-        public virtual int MinimumCastingSpeed
-        {
-            get { return 500; }
-        }
-
-        /// <summary>
-        /// Can this living cast while attacking?
-        /// </summary>
-        public virtual bool CanCastWhileAttacking()
-        {
-            return false;
-        }
-
-        /// <summary>
-        /// Calculate how fast this living can cast a given spell
-        /// </summary>
         public virtual int CalculateCastingTime(SpellLine line, Spell spell)
         {
-            int ticks = spell.CastTime;
-
             if (spell.InstrumentRequirement != 0 ||
-                line.KeyName == GlobalSpellsLines.Item_Spells ||
+                line.KeyName is GlobalSpellsLines.Item_Spells ||
                 line.KeyName.StartsWith(GlobalSpellsLines.Champion_Lines_StartWith))
             {
-                return ticks;
+                return spell.CastTime;
             }
 
-            double percent = DexterityCastTimeReduction;
-
-            ticks = (int)(ticks * Math.Max(CastingSpeedReductionCap, percent));
-            if (ticks < MinimumCastingSpeed)
-                ticks = MinimumCastingSpeed;
-
-            return ticks;
-        }
-
-        /// <summary>
-        /// The casting time reduction based on dexterity bonus.
-        /// http://daoc.nisrv.com/modules.php?name=DD_DMG_Calculator
-        /// Q: Would you please give more detail as to how dex affects a caster?
-        /// For instance, I understand that when I have my dex maxed I will cast 25% faster.
-        /// How does this work incrementally? And will a lurikeen be able to cast faster in the end than another race?
-        /// A: From a dex of 50 to a dex of 250, the formula lets you cast 1% faster for each ten points.
-        /// From a dex of 250 to the maximum possible (which as you know depends on your starting total),
-        /// your speed increases 1% for every twenty points.
-        /// </summary>
-        public virtual double DexterityCastTimeReduction
-        {
-            get
+            if (EffectListService.GetAbilityEffectOnTarget(this, eEffect.QuickCast) != null)
             {
-                int dex = GetModified(eProperty.Dexterity);
-                if (dex < 60) return 1.0;
-                else if (dex < 250) return 1.0 - (dex - 60) * 0.15 * 0.01;
-                else return 1.0 - ((dex - 60) * 0.15 + (dex - 250) * 0.05) * 0.01;
+                // Most casters have access to the Quickcast ability (or the Necromancer equivalent, Facilitate Painworking).
+                // This ability will allow you to cast a spell without interruption.
+                // http://support.darkageofcamelot.com/kb/article.php?id=022
+
+                // A: You're right. The answer I should have given was that Quick Cast reduces the time needed to cast to a flat two seconds,
+                // and that a spell that has been quick casted cannot be interrupted. ...
+                // http://www.camelotherald.com/news/news_article.php?storyid=1383
+
+                return 2000;
             }
+
+            // Q: Would you please give more detail as to how dex affects a caster?
+            // For instance, I understand that when I have my dex maxed I will cast 25% faster.
+            // How does this work incrementally? And will a lurikeen be able to cast faster in the end than another race?
+            // A: From a dex of 50 to a dex of 250, the formula lets you cast 1% faster for each ten points.
+            // From a dex of 250 to the maximum possible (which as you know depends on your starting total),
+            // your speed increases 1% for every twenty points.
+
+            // The grab bag was proven to be wrong. We're using Phoenix's formula.
+            // https://playphoenix.online/forum/bug-tracker/resolved-issues/casting-speed-formula-is-wrong-01CHWTCXSGYS4TZ96DEF7FM55F#p01CHWTCXSGX4057FQ9VF0DSM6K
+            // https://docs.google.com/spreadsheets/d/1BFbHYz_smxP8KPGoytb4SqQnEOoPqUc8SIKmSqQF4BI
+
+            double castTime = spell.CastTime;
+            double dexterityModifier = 1 - (GetModified(eProperty.Dexterity) - 60) / 600.0;
+            double bonusModifier = 1 - GetModified(eProperty.CastingSpeed) * 0.01;
+            castTime *= dexterityModifier * bonusModifier;
+            return (int) Math.Max(castTime, spell.CastTime * 0.4); // Capped at 40% of the delve speed.
         }
 
         public virtual int MeleeAttackRange => 200;
@@ -495,15 +475,15 @@ namespace DOL.GS
             return GetModified(eProperty.Strength);
         }
 
-        /// <summary>
-        /// calculate item armor factor influenced by quality, con and duration
-        /// </summary>
-        /// <param name="slot"></param>
-        /// <returns></returns>
-        public virtual double GetArmorAF(eArmorSlot slot)
-        {
-            return GetModified(eProperty.ArmorFactor);
-        }
+		/// <summary>
+		/// calculate item armor factor influenced by quality, con and duration
+		/// </summary>
+		/// <param name="slot"></param>
+		/// <returns></returns>
+		public virtual double GetArmorAF(eArmorSlot slot)
+		{
+			return GetModified(eProperty.ArmorFactor) / 6.0;
+		}
 
         /// <summary>
         /// Calculates armor absorb level
@@ -969,34 +949,53 @@ namespace DOL.GS
             set { }
         }
 
+		private object _interruptTimerLock = new();
+
 		/// <summary>
 		/// Starts the interrupt timer on this living.
 		/// </summary>
 		public virtual void StartInterruptTimer(int duration, eAttackType attackType, GameLiving attacker)
 		{
+			long newInterruptTime = GameLoop.GameLoopTime + duration;
+
 			if (attacker == this)
 			{
-				SelfInterruptTime = GameLoop.GameLoopTime + duration;
+				SelfInterruptTime = newInterruptTime;
 				return;
 			}
 
-			if (!Util.Chance(100 + GetConLevel(attacker) * 15))
+			// 3% reduced interrupt chance per level difference.
+			if (!Util.Chance(100 + (attacker.EffectiveLevel - EffectiveLevel) * 3))
 				return;
 
-			// Don't replace the current interrupt with a shorter one.
-			// Otherwise a slow melee hit's interrupt duration will be made shorter by a proc for example.
-			InterruptTime = Math.Max(InterruptTime, GameLoop.GameLoopTime + duration);
-			LastInterrupter = attacker;
+			lock (_interruptTimerLock)
+			{
+				bool wasAlreadyInterrupted = IsBeingInterrupted;
 
-			if (castingComponent?.SpellHandler != null)
-				castingComponent.SpellHandler.CasterIsAttacked(attacker);
-			else if (ActiveWeaponSlot == eActiveWeaponSlot.Distance)
+				// Don't update the interrupt time if it's shorter than the current one.
+				// If that's the case, we can assume the target is still being interrupted and isn't able to attack.
+				if (InterruptTime >= newInterruptTime)
+					return;
+
+				InterruptTime = newInterruptTime;
+				LastInterrupter = attacker;
+
+				// If the time is updated, we also check if the target was already interrupted.
+				// This should prevent multiple threads from executing the interrupt code, without expanding the lock.
+				if (wasAlreadyInterrupted)
+					return;
+			}
+
+			// Perform the actual interrupt.
+			if (castingComponent.SpellHandler?.CasterIsAttacked(attacker) == true)
+				return;
+			else if (ActiveWeaponSlot is eActiveWeaponSlot.Distance)
 			{
 				if (attackComponent.AttackState)
 					CheckRangedAttackInterrupt(attacker, attackType);
-				else if (effectListComponent.ContainsEffectForEffectType(eEffect.Volley))
+				else
 				{
-					AtlasOF_VolleyECSEffect volley = (AtlasOF_VolleyECSEffect) EffectListService.GetEffectOnTarget(this, eEffect.Volley);
+					AtlasOF_VolleyECSEffect volley = EffectListService.GetEffectOnTarget(this, eEffect.Volley) as AtlasOF_VolleyECSEffect;
 					volley?.OnAttacked();
 				}
 			}
@@ -1070,7 +1069,7 @@ namespace DOL.GS
 
             // Proc chance is 2.5% per SPD, i.e. 10% for a 3.5 SPD weapon. - Tolakram, changed average speed to 3.5
 
-            int procChance = (int)Math.Ceiling((weapon.ProcChance > 0 ? weapon.ProcChance : 10) * (weapon.SPD_ABS / 35.0));
+            double procChance = (weapon.ProcChance > 0 ? weapon.ProcChance : 10) * (weapon.SPD_ABS / 35.0) * 0.01;
 
             //Error protection and log for Item Proc's
             Spell procSpell = null;
@@ -1092,11 +1091,11 @@ namespace DOL.GS
             }
 
             // Proc #1
-            if (procSpell != null && Util.Chance(procChance))
+            if (procSpell != null && Util.ChanceDouble(procChance))
                 StartWeaponMagicalEffect(weapon, ad, SkillBase.GetSpellLine(GlobalSpellsLines.Item_Effects), weapon.ProcSpellID, false);
 
             // Proc #2
-            if (procSpell1 != null && Util.Chance(procChance))
+            if (procSpell1 != null && Util.ChanceDouble(procChance))
                 StartWeaponMagicalEffect(weapon, ad, SkillBase.GetSpellLine(GlobalSpellsLines.Item_Effects), weapon.ProcSpellID1, false);
 
             // Poison
@@ -1210,7 +1209,7 @@ namespace DOL.GS
             }
         }
 
-		public virtual double TryEvade(AttackData ad, AttackData lastAD, int attackerConLevel, int attackerCount)
+		public virtual double TryEvade(AttackData ad, AttackData lastAD, int attackerCount)
 		{
 			// 1. A: It isn't possible to give a simple answer. The formula includes such elements
 			// as your level, your target's level, your level of evade, your QUI, your DEX, your
@@ -1243,39 +1242,27 @@ namespace DOL.GS
                 if (attackerCount > 1)
                     evadeChance -= (attackerCount - 1) * 0.03;
 
-                evadeChance *= 0.001;
-                evadeChance += 0.01 * attackerConLevel;
+				evadeChance *= 0.001;
 
                 // Kelgor's Claw 15% evade.
                 if (lastAD != null && lastAD.Style != null && lastAD.Style.ID == 380)
                     evadeChance += 15 * 0.01;
 
-                // Reduce chance by attacker's defense penetration.
-                evadeChance *= 1 - GetAttackerDefensePenetration(ad.Attacker, ad.Weapon) / 100.0;
+				// Reduce chance by attacker's defense penetration.
+				evadeChance *= 1 - ad.DefensePenetration;
 
                 if (ad.AttackType == eAttackType.Ranged)
                     evadeChance /= 5.0;
 
-                if (evadeChance < 0.01)
-                    evadeChance = 0.01;
-                else if (evadeChance > Properties.EVADE_CAP && ad.Attacker is IGamePlayer && ad.Target is IGamePlayer)
-                    evadeChance = Properties.EVADE_CAP; // 50% evade cap RvR only. http://www.camelotherald.com/more/664.shtml
+				if (evadeChance > Properties.EVADE_CAP && ad.Attacker is IGamePlayer && ad.Target is IGamePlayer)
+					evadeChance = Properties.EVADE_CAP; // 50% evade cap RvR only. http://www.camelotherald.com/more/664.shtml
 
-                if (evadeChance > 0.995)
-                    evadeChance = 0.995;
-
-                if (ad.AttackType == eAttackType.MeleeDualWield)
-                    evadeChance = Math.Max(evadeChance * 0.5, 0.01);
-
-                if (IsObjectInFront(ad.Attacker, 180) &&
-                    (evadeBuff != null || player != null && player.HasAbility(Abilities.Evade)) &&
-                    evadeChance < 0.05 &&
-                    ad.AttackType != eAttackType.Ranged)
-                {
-                    // If player has a hard evade source, 5% minimum evade chance.
-                    evadeChance = 0.05;
-                }
-            }
+				if (evadeChance > 0.99)
+					evadeChance = 0.99;
+				
+				if (ad.AttackType is eAttackType.MeleeDualWield)
+					evadeChance *= 0.5;
+			}
 
             // Infiltrator RR5.
             if (ad.Attacker is IGamePlayer playerAttacker)
@@ -1289,7 +1276,7 @@ namespace DOL.GS
             return evadeChance;
         }
 
-		public virtual double TryParry(AttackData ad, AttackData lastAD, int attackerConLevel, int attackerCount)
+		public virtual double TryParry(AttackData ad, AttackData lastAD, int attackerCount)
 		{
 			//1.  Dual wielding does not grant more chances to parry than a single weapon.  Grab Bag 9/12/03
 			//2.  There is no hard cap on ability to Parry.  Grab Bag 8/13/02
@@ -1314,29 +1301,29 @@ namespace DOL.GS
                 BladeBarrierEffect BladeBarrier = null;
                 ECSGameEffect parryBuff = EffectListService.GetEffectOnTarget(this, eEffect.SavageBuff, eSpellType.SavageParryBuff);
 
-                if (this is IGamePlayer player)
-                {
-                    // BladeBarrier overwrites all parrying, 90% chance to parry any attack, does not consider other bonuses to parry.
-                    // They still need an active weapon to parry with BladeBarrier
-                    BladeBarrier = player.EffectList.GetOfType<BladeBarrierEffect>();
-
-                    if (BladeBarrier != null && ActiveWeapon != null)
-                        parryChance = 0.90;
-                    else if (IsObjectInFront(ad.Attacker, 120))
-                    {
-                        if ((player.HasSpecialization(Specs.Parry) || parryBuff != null) && ActiveWeapon != null &&
-                            ActiveWeapon.Object_Type != (int)eObjectType.RecurvedBow &&
-                            ActiveWeapon.Object_Type != (int)eObjectType.Longbow &&
-                            ActiveWeapon.Object_Type != (int)eObjectType.CompositeBow &&
-                            ActiveWeapon.Object_Type != (int)eObjectType.Crossbow &&
-                            ActiveWeapon.Object_Type != (int)eObjectType.Fired)
-                        {
-                            parryChance = GetModified(eProperty.ParryChance);
-                        }
-                    }
-                }
-                else if (this is GameNPC && IsObjectInFront(ad.Attacker, 120))
-                    parryChance = GetModified(eProperty.ParryChance);
+				if (this is IGamePlayer player)
+				{
+					// BladeBarrier overwrites all parrying, 90% chance to parry any attack, does not consider other bonuses to parry.
+					// They still need an active weapon to parry with BladeBarrier
+					BladeBarrier = player.EffectList.GetOfType<BladeBarrierEffect>();
+					
+					if (BladeBarrier != null && ActiveWeapon != null)
+						parryChance = 0.90;
+					else if (IsObjectInFront(ad.Attacker, 120))
+					{
+						if ((player.HasSpecialization(Specs.Parry) || parryBuff != null) && ActiveWeapon != null &&
+							(eObjectType) ActiveWeapon.Object_Type is not eObjectType.RecurvedBow &&
+							(eObjectType) ActiveWeapon.Object_Type is not eObjectType.Longbow &&
+							(eObjectType) ActiveWeapon.Object_Type is not eObjectType.CompositeBow &&
+							(eObjectType) ActiveWeapon.Object_Type is not eObjectType.Crossbow &&
+							(eObjectType) ActiveWeapon.Object_Type is not eObjectType.Fired)
+						{
+							parryChance = GetModified(eProperty.ParryChance);
+						}
+					}
+				}
+				else if (this is GameNPC && IsObjectInFront(ad.Attacker, 120))
+					parryChance = GetModified(eProperty.ParryChance);
 
                 if (BladeBarrier != null && !ad.Target.IsStunned && !ad.Target.IsSitting)
                     return parryChance;
@@ -1346,28 +1333,25 @@ namespace DOL.GS
                     if (attackerCount > 1)
                         parryChance /= attackerCount / 2;
 
-                    parryChance *= 0.001;
-                    parryChance += 0.05 * attackerConLevel;
+					parryChance *= 0.001;
 
                     // Tribal Wrath 25% evade.
                     if (lastAD != null && lastAD.Style != null && lastAD.Style.ID == 381)
                         parryChance += 25 * 0.01;
 
-                    // Reduce chance by attacker's defense penetration.
-                    parryChance *= 1 - GetAttackerDefensePenetration(ad.Attacker, ad.Weapon) / 100.0;
+					// Reduce chance by attacker's defense penetration.
+					parryChance *= 1 - ad.DefensePenetration;
 
-                    if (parryChance < 0.01)
-                        parryChance = 0.01;
-                    else if (parryChance > Properties.PARRY_CAP && ad.Attacker is IGamePlayer && ad.Target is IGamePlayer)
-                        parryChance = Properties.PARRY_CAP;
+					if (parryChance > Properties.PARRY_CAP && ad.Attacker is IGamePlayer && ad.Target is IGamePlayer)
+						parryChance = Properties.PARRY_CAP;
 
-                    if (parryChance > 0.995)
-                        parryChance = 0.995;
-                }
-            }
+					if (parryChance > 0.99)
+						parryChance = 0.99;
+				}
+			}
 
-            if (ad.AttackType == eAttackType.MeleeTwoHand)
-                parryChance = Math.Max(parryChance * 0.5, 0);
+			if (ad.AttackType is eAttackType.MeleeTwoHand)
+				parryChance *= 0.5;
 
             // Infiltrator RR5.
             if (ad.Attacker is IGamePlayer attackerPlayer)
@@ -1381,8 +1365,10 @@ namespace DOL.GS
             return parryChance;
         }
 
-		public virtual double TryBlock(AttackData ad, int attackerConLevel, int attackerCount)
+		public virtual double TryBlock(AttackData ad, out int shieldSize)
 		{
+			shieldSize = 0;
+
 			//1.Quality does not affect the chance to block at this time.  Grab Bag 3/7/03
 			//2.Condition and enchantment increases the chance to block  Grab Bag 2/27/03
 			//3.There is currently no hard cap on chance to block  Grab Bag 2/27/03 and 8/16/02
@@ -1406,45 +1392,34 @@ namespace DOL.GS
             double blockChance = 0;
             DbInventoryItem leftHand = Inventory?.GetItem(eInventorySlot.LeftHandWeapon);
 
-            if (leftHand != null && leftHand.Object_Type != (int)eObjectType.Shield)
-                leftHand = null;
+			if (leftHand != null && (eObjectType) leftHand.Object_Type is not eObjectType.Shield)
+				leftHand = null;
 
             IGamePlayer player = this as IGamePlayer;
 
-            if (IsObjectInFront(ad.Attacker, 120) && !ad.Target.IsStunned && !ad.Target.IsSitting)
-            {
-                if (player != null)
-                {
-                    if (player.HasAbility(Abilities.Shield) && leftHand != null && (player.ActiveWeapon == null || player.ActiveWeapon.Item_Type == Slot.RIGHTHAND || player.ActiveWeapon.Item_Type == Slot.LEFTHAND))
-                        blockChance = GetModified(eProperty.BlockChance) * (leftHand.Quality * 0.01) * (leftHand.Condition / (double)leftHand.MaxCondition);
-                }
-                else
-                    blockChance = GetModified(eProperty.BlockChance);
-            }
+			if (IsObjectInFront(ad.Attacker, 120) && !ad.Target.IsStunned && !ad.Target.IsSitting)
+			{
+				if (player != null)
+				{
+					if (player.HasAbility(Abilities.Shield) && leftHand != null && (player.ActiveWeapon == null || player.ActiveWeapon.Item_Type is Slot.RIGHTHAND || player.ActiveWeapon.Item_Type is Slot.LEFTHAND))
+						blockChance = GetModified(eProperty.BlockChance) * (leftHand.Quality * 0.01) * (leftHand.Condition / (double) leftHand.MaxCondition);
+				}
+				else
+					blockChance = GetModified(eProperty.BlockChance);
+			}
 
-            if (blockChance > 0)
-            {
-                // Reduce block chance if the shield used is too small.
-                int shieldSize = 1;
+			if (blockChance > 0)
+			{
+				blockChance *= 0.001;
+				blockChance *= 1 - ad.DefensePenetration;
 
-                if (leftHand != null)
-                {
-                    shieldSize = Math.Max(leftHand.Type_Damage, 1);
+				if (blockChance > Properties.BLOCK_CAP && ad.Attacker is IGamePlayer && ad.Target is IGamePlayer)
+					blockChance = Properties.BLOCK_CAP;
 
-                    if (attackerCount > shieldSize)
-                        blockChance *= shieldSize / (double)attackerCount;
-                }
+				shieldSize = 1;
 
-                blockChance *= 0.001;
-                blockChance += attackerConLevel * 0.05;
-
-                // Reduce chance by attacker's defense penetration.
-                blockChance *= 1 - GetAttackerDefensePenetration(ad.Attacker, ad.Weapon) / 100;
-
-                if (blockChance < 0.01)
-                    blockChance = 0.01;
-                else if (blockChance > Properties.BLOCK_CAP && ad.Attacker is IGamePlayer && ad.Target is IGamePlayer)
-                    blockChance = Properties.BLOCK_CAP;
+				if (leftHand != null)
+					shieldSize = Math.Max(leftHand.Type_Damage, 1);
 
                 // Possibly intended to be applied in RvR only.
                 if (shieldSize == 1 && blockChance > 0.8)
@@ -1458,16 +1433,16 @@ namespace DOL.GS
                 {
                     EngageECSGameEffect engage = (EngageECSGameEffect)EffectListService.GetEffectOnTarget(this, eEffect.Engage);
 
-                    if (engage != null && attackComponent.AttackState && engage.EngageTarget == ad.Attacker)
-                    {
-                        if (engage.EngageTarget.LastAttackedByEnemyTick > GameLoop.GameLoopTime - EngageAbilityHandler.ENGAGE_ATTACK_DELAY_TICK)
-                            player?.Out.SendMessage(engage.EngageTarget.GetName(0, true) + " has been attacked recently and you are unable to engage.", eChatType.CT_System, eChatLoc.CL_SystemWindow);
-                        else if (Endurance < EngageAbilityHandler.ENGAGE_ENDURANCE_COST)
-                            engage.Cancel(false, true);
-                        else
-                        {
-                            Endurance -= EngageAbilityHandler.ENGAGE_ENDURANCE_COST;
-                            player?.Out.SendMessage("You concentrate on blocking the blow!", eChatType.CT_Skill, eChatLoc.CL_SystemWindow);
+					if (engage != null && attackComponent.AttackState && engage.EngageTarget == ad.Attacker)
+					{
+						if (engage.EngageTarget.LastAttackedByEnemyTick > GameLoop.GameLoopTime - EngageAbilityHandler.ENGAGE_ATTACK_DELAY_TICK)
+							player?.Out.SendMessage($"{engage.EngageTarget.GetName(0, true)} has been attacked recently and you are unable to engage.", eChatType.CT_System, eChatLoc.CL_SystemWindow);
+						else if (Endurance < EngageAbilityHandler.ENGAGE_ENDURANCE_COST)
+							engage.Cancel(false, true);
+						else
+						{
+							Endurance -= EngageAbilityHandler.ENGAGE_ENDURANCE_COST;
+							player?.Out.SendMessage("You concentrate on blocking the blow!", eChatType.CT_Skill, eChatLoc.CL_SystemWindow);
 
                             if (blockChance < 0.95)
                                 blockChance = 0.95;
@@ -1475,9 +1450,9 @@ namespace DOL.GS
                     }
                 }
 
-                if (ad.AttackType == eAttackType.MeleeDualWield)
-                    blockChance *= 0.5;
-            }
+				if (ad.AttackType is eAttackType.MeleeDualWield)
+					blockChance *= 0.5;
+			}
 
             // Infiltrator RR5.
             if (player != null)
@@ -1488,60 +1463,34 @@ namespace DOL.GS
                     blockChance = Math.Max(blockChance - OverwhelmAbility.BONUS, 0);
             }
 
-            return blockChance;
-        }
+			return blockChance;
+		}
 
-        public double GetAttackerDefensePenetration(GameLiving living, DbInventoryItem weapon)
-        {
-            double totalReduction = 0.0;
+		/// <summary>
+		/// Modify the attack done to this living.
+		/// This method offers us a chance to modify the attack data prior to the living taking damage.
+		/// </summary>
+		/// <param name="attackData">The attack data for this attack</param>
+		public virtual void ModifyAttack(AttackData attackData) { }
 
-            if (living is IGamePlayer p)
-            {
-                double skillBasedReduction = living.WeaponSpecLevel(weapon) * 0.15;
-                double statBasedReduction = living.GetWeaponStat(weapon) * .05;
-                //p.CharacterClass.WeaponSkillBase returns unscaled damage table value
-                //divide by 200 to change to scaling factor. example: warrior's 460 WeaponSkillBase / 200 = 2.3 Damage Table
-                //divide by final 2.1 to use the 2.1 damage table as our anchor. classes below 2.1 damage table will have slightly reduced penetration, above 2.1 will have increased penetration
-                double tableMod = p.CharacterClass.WeaponSkillBase / 200.0 / 2.1;
-                totalReduction = (skillBasedReduction + statBasedReduction) * tableMod;
-            }
-            else
-            {
-                double NPCReduction = 15 * (living.Level / 50.0); //10% penetration at level 50
-                totalReduction = NPCReduction;
-                if (totalReduction < 0) totalReduction = 0;
-            }
-
-            return totalReduction;
-        }
-
-        /// <summary>
-        /// Modify the attack done to this living.
-        /// This method offers us a chance to modify the attack data prior to the living taking damage.
-        /// </summary>
-        /// <param name="attackData">The attack data for this attack</param>
-        public virtual void ModifyAttack(AttackData attackData)
-        {
-        }
-
-        /// <summary>
-        /// This method is called whenever this living
-        /// should take damage from some source
-        /// </summary>
-        /// <param name="source">the damage source</param>
-        /// <param name="damageType">the damage type</param>
-        /// <param name="damageAmount">the amount of damage</param>
-        /// <param name="criticalAmount">the amount of critical damage</param>
-        public override void TakeDamage(GameObject source, eDamageType damageType, int damageAmount, int criticalAmount)
-        {
-            base.TakeDamage(source, damageType, damageAmount, criticalAmount);
+		/// <summary>
+		/// This method is called whenever this living
+		/// should take damage from some source
+		/// </summary>
+		/// <param name="source">the damage source</param>
+		/// <param name="damageType">the damage type</param>
+		/// <param name="damageAmount">the amount of damage</param>
+		/// <param name="criticalAmount">the amount of critical damage</param>
+		public override void TakeDamage(GameObject source, eDamageType damageType, int damageAmount, int criticalAmount)
+		{
+			base.TakeDamage(source, damageType, damageAmount, criticalAmount);
 
             double damageDealt = damageAmount + criticalAmount;
 
             #region PVP DAMAGE
 
             // Is this a GamePlayer behind the source?
-            if (source is IGamePlayer || (source is GameNPC && (source as GameNPC).Brain is IControlledBrain && ((source as GameNPC).Brain as IControlledBrain).GetPlayerOwner() != null) || source is GameSiegeWeapon)
+            if (source is IGamePlayer || (source is GameNPC && (source as GameNPC).Brain is IControlledBrain && ((source as GameNPC).Brain as IControlledBrain).GetIPlayerOwner() != null) || source is GameSiegeWeapon)
             {
                 // Only apply to necropet.
                 if (this is NecromancerPet)
@@ -1566,23 +1515,23 @@ namespace DOL.GS
                     source = brain.GetLivingOwner();
             }
 
-            IGamePlayer attackerPlayer = source as IGamePlayer;
-            if (attackerPlayer != null && attackerPlayer != this)
-            {
-                // Apply Mauler RA5L
-                GiftOfPerizorEffect GiftOfPerizor = EffectList.GetOfType<GiftOfPerizorEffect>();
-                if (GiftOfPerizor != null)
-                {
-                    int difference = (int)(0.25 * damageDealt); // RA absorb 25% damage
-                    damageDealt -= difference;
-                    IGamePlayer TheMauler = TempProperties.GetProperty<GamePlayer>("GiftOfPerizorOwner", null);
-                    if (TheMauler != null && TheMauler.IsAlive)
-                    {
-                        // Calculate mana using %. % is calculated with target maxhealth and damage difference, apply this % to mauler maxmana
-                        double manareturned = (difference / MaxHealth * TheMauler.MaxMana);
-                        ((GameLiving)TheMauler).ChangeMana(source, eManaChangeType.Spell, (int)manareturned);
-                    }
-                }
+			IGamePlayer attackerPlayer = source as IGamePlayer;
+			if (attackerPlayer != null && attackerPlayer != this)
+			{
+				// Apply Mauler RA5L
+				GiftOfPerizorEffect GiftOfPerizor = EffectList.GetOfType<GiftOfPerizorEffect>();
+				if (GiftOfPerizor != null)
+				{
+					int difference = (int)(0.25 * damageDealt); // RA absorb 25% damage
+					damageDealt -= difference;
+					IGamePlayer TheMauler = this.TempProperties.GetProperty<IGamePlayer>("GiftOfPerizorOwner");
+					if (TheMauler != null && TheMauler.IsAlive)
+					{
+						// Calculate mana using %. % is calculated with target maxhealth and damage difference, apply this % to mauler maxmana
+						double manareturned = (difference / this.MaxHealth * TheMauler.MaxMana);
+						((GameLiving)TheMauler).ChangeMana(source, eManaChangeType.Spell, (int)manareturned);
+					}
+				}
 
                 Group attackerGroup = ((GameLiving)attackerPlayer).Group;
 
@@ -1805,7 +1754,7 @@ namespace DOL.GS
                 if (this is GameNPC gameNpc && ActiveWeaponSlot == eActiveWeaponSlot.Distance && IsWithinRadius(ad.Attacker, 150))
                     gameNpc.SwitchToMelee(ad.Attacker);
 
-                attackComponent.AddAttacker(ad.Attacker);
+				attackComponent.AddAttacker(ad);
 
                 if (ad.SpellHandler == null || (ad.SpellHandler != null && ad.SpellHandler is not DoTSpellHandler))
                 {
@@ -2272,57 +2221,22 @@ namespace DOL.GS
             }
         }
 
-        /// <summary>
-        /// Called when the living is gaining experience
-        /// </summary>
-        /// <param name="expTotal">total amount of xp to gain</param>
-        /// <param name="expCampBonus">camp bonus to display</param>
-        /// <param name="expGroupBonus">group bonus to display</param>
-        /// <param name="expOutpostBonus">outpost bonux to display</param>
-        /// <param name="sendMessage">should exp gain message be sent</param>
-        /// <param name="allowMultiply">should the xp amount be multiplied</param>
-        public virtual void GainExperience(eXPSource xpSource, long expTotal, long expCampBonus, long expGroupBonus, long expOutpostBonus, bool sendMessage, bool allowMultiply, bool notify)
-        {
-            if (expTotal > 0 && notify)
-                Notify(GameLivingEvent.GainedExperience, this, new GainedExperienceEventArgs(expTotal, expCampBonus, expGroupBonus, expOutpostBonus, sendMessage, allowMultiply, xpSource));
-        }
+		public void GainExperience(eXPSource xpSource, long exp, bool allowMultiply = false)
+		{
+			GainExperience(new(exp, 0, 0, 0, 0, 0, true, allowMultiply, xpSource));
+		}
 
-        /// <summary>
-        /// Called when this living gains realm points
-        /// </summary>
-        /// <param name="amount">amount of realm points gained</param>
-        public virtual void GainRealmPoints(long amount)
-        {
-            Notify(GameLivingEvent.GainedRealmPoints, this, new GainedRealmPointsEventArgs(amount));
-        }
+		public virtual void GainExperience(GainedExperienceEventArgs arguments, bool notify = true) { }
 
-        /// <summary>
-        /// Called when this living gains bounty points
-        /// </summary>
-        /// <param name="amount"></param>
-        public virtual void GainBountyPoints(long amount)
-        {
-            Notify(GameLivingEvent.GainedBountyPoints, this, new GainedBountyPointsEventArgs(amount));
-        }
+		public virtual void GainRealmPoints(long amount)
+		{
+			Notify(GameLivingEvent.GainedRealmPoints, this, new GainedRealmPointsEventArgs(amount));
+		}
 
-        /// <summary>
-        /// Called when the living is gaining experience
-        /// </summary>
-        /// <param name="exp">base amount of xp to gain</param>
-        public void GainExperience(eXPSource xpSource, long exp)
-        {
-            GainExperience(xpSource, exp, 0, 0, 0, true, false, true);
-        }
-
-        /// <summary>
-        /// Called when the living is gaining experience
-        /// </summary>
-        /// <param name="exp">base amount of xp to gain</param>
-        /// <param name="allowMultiply">Do we allow the xp to be multiplied</param>
-        public void GainExperience(eXPSource xpSource, long exp, bool allowMultiply)
-        {
-            GainExperience(xpSource, exp, 0, 0, 0, true, allowMultiply, true);
-        }
+		public virtual void GainBountyPoints(long amount)
+		{
+			Notify(GameLivingEvent.GainedBountyPoints, this, new GainedBountyPointsEventArgs(amount));
+		}
 
         /// <summary>
         /// Called when an enemy of this living is killed
@@ -2867,115 +2781,54 @@ namespace DOL.GS
             get { return m_enduranceRegenerationPeriod; }
         }
 
-        /// <summary>
-        /// The lock object for lazy regen timers initialization
-        /// </summary>
-        protected readonly object m_regenTimerLock = new object();
+		/// <summary>
+		/// Starts the health regeneration
+		/// </summary>
+		public virtual void StartHealthRegeneration()
+		{
+			if (!IsAlive || ObjectState is not eObjectState.Active)
+				return;
 
-        /// <summary>
-        /// Starts the health regeneration
-        /// </summary>
-        public virtual void StartHealthRegeneration()
-        {
-            if (!IsAlive || ObjectState != eObjectState.Active)
-                return;
-            lock (m_regenTimerLock)
-            {
-                if (m_healthRegenerationTimer == null)
-                {
-                    m_healthRegenerationTimer = new ECSGameTimer(this);
-                    m_healthRegenerationTimer.Callback = new ECSGameTimer.ECSTimerCallback(HealthRegenerationTimerCallback);
-                }
-                else if (m_healthRegenerationTimer.IsAlive)
-                {
-                    return;
-                }
+			if (m_healthRegenerationTimer == null)
+				m_healthRegenerationTimer = new(this, new ECSGameTimer.ECSTimerCallback(HealthRegenerationTimerCallback));
+			else if (m_healthRegenerationTimer.IsAlive)
+				return;
 
-                m_healthRegenerationTimer.Start(HealthRegenerationPeriod);
-            }
-        }
-
-        /// <summary>
-        /// Starts the power regeneration
-        /// </summary>
-        public virtual void StartPowerRegeneration()
-        {
-            if (ObjectState != eObjectState.Active)
-                return;
-            lock (m_regenTimerLock)
-            {
-                if (m_powerRegenerationTimer == null)
-                {
-                    m_powerRegenerationTimer = new ECSGameTimer(this);
-                    m_powerRegenerationTimer.Callback = new ECSGameTimer.ECSTimerCallback(PowerRegenerationTimerCallback);
-                }
-                else if (m_powerRegenerationTimer.IsAlive)
-                {
-                    return;
-                }
-
-				m_powerRegenerationTimer.Start(PowerRegenerationPeriod);
-			}
+			m_healthRegenerationTimer.Start(m_healthRegenerationPeriod);
 		}
+
+		/// <summary>
+		/// Starts the power regeneration
+		/// </summary>
+		public virtual void StartPowerRegeneration() { }
+
 		/// <summary>
 		/// Starts the endurance regeneration
 		/// </summary>
-		public virtual void StartEnduranceRegeneration()
-		{
-			if (ObjectState != eObjectState.Active)
-				return;
-			lock (m_regenTimerLock)
-			{
-				if (m_enduRegenerationTimer == null)
-				{
-					m_enduRegenerationTimer = new ECSGameTimer(this);
-					m_enduRegenerationTimer.Callback = new ECSGameTimer.ECSTimerCallback(EnduranceRegenerationTimerCallback);
-				}
-				else if (m_enduRegenerationTimer.IsAlive)
-				{
-					return;
-				}
-				m_enduRegenerationTimer.Start(EnduranceRegenerationPeriod);
-			}
-		}
+		public virtual void StartEnduranceRegeneration() { }
+
 		/// <summary>
 		/// Stop the health regeneration
 		/// </summary>
 		public virtual void StopHealthRegeneration()
 		{
-			lock (m_regenTimerLock)
-			{
-				if (m_healthRegenerationTimer == null)
-					return;
-				m_healthRegenerationTimer.Stop();
-				m_healthRegenerationTimer = null;
-			}
+			m_healthRegenerationTimer?.Stop();
 		}
+
 		/// <summary>
 		/// Stop the power regeneration
 		/// </summary>
 		public virtual void StopPowerRegeneration()
 		{
-			lock (m_regenTimerLock)
-			{
-				if (m_powerRegenerationTimer == null)
-					return;
-				m_powerRegenerationTimer.Stop();
-				m_powerRegenerationTimer = null;
-			}
+			m_powerRegenerationTimer?.Stop();
 		}
+
 		/// <summary>
 		/// Stop the endurance regeneration
 		/// </summary>
 		public virtual void StopEnduranceRegeneration()
 		{
-			lock (m_regenTimerLock)
-			{
-				if (m_enduRegenerationTimer == null)
-					return;
-				m_enduRegenerationTimer.Stop();
-				m_enduRegenerationTimer = null;
-			}
+			m_enduRegenerationTimer?.Stop();
 		}
 
 		protected virtual int HealthRegenerationTimerCallback(ECSGameTimer callingTimer)
@@ -3028,13 +2881,8 @@ namespace DOL.GS
 			}
 			else
 			{
-				int stackingBonus = 0;
-
-				if (this is IGamePlayer p)
-					stackingBonus = p.PowerRegenStackingBonus;
-
 				if (Mana < MaxMana)
-					ChangeMana(this, eManaChangeType.Regenerate, GetModified(eProperty.PowerRegenerationAmount) + stackingBonus);
+					ChangeMana(this, eManaChangeType.Regenerate, GetModified(eProperty.PowerRegenerationAmount));
 
 				if (Mana >= MaxMana)
 					return 0;
@@ -3047,11 +2895,6 @@ namespace DOL.GS
 
 			if (IsSitting)
 				totalRegenPeriod /= 2;
-
-			AtlasOF_SerenityAbility raSerenity = GetAbility<AtlasOF_SerenityAbility>();
-
-			if (raSerenity != null && raSerenity.Level > 0)
-				totalRegenPeriod -= raSerenity.GetAmountForLevel(raSerenity.Level);
 
 			return totalRegenPeriod;
 
@@ -3306,46 +3149,27 @@ namespace DOL.GS
         #region Speed/Heading/Target/GroundTarget/GuildName/SitState/Level
 
         /// <summary>
-        /// The targetobject of this living
-        /// This is a weak reference to a GameObject, which
-        /// means that the gameobject can be cleaned up even
-        /// when this living has a reference on it ...
-        /// </summary>
-        protected readonly WeakReference m_targetObjectWeakReference;
-
-        /// <summary>
         /// Holds the Living's Coordinate inside the current Region
         /// </summary>
         protected Point3D m_groundTarget;
 
-        /// <summary>
-        /// Gets or sets the target of this living
-        /// </summary>
-        public virtual GameObject TargetObject
-        {
-            get
-            {
-                return (m_targetObjectWeakReference.Target as GameObject);
-            }
-            set
-            {
-                m_targetObjectWeakReference.Target = value;
-            }
-        }
+		/// <summary>
+		/// Gets or sets the target of this living
+		/// </summary>
+		public virtual GameObject TargetObject { get; set; }
 
-        public virtual bool IsSitting
-        {
-            get { return false; }
-            set { }
-        }
-
-        /// <summary>
-        /// Gets the Living's ground-target Coordinate inside the current Region
-        /// </summary>
-        public virtual Point3D GroundTarget
-        {
-            get { return m_groundTarget; }
-        }
+		public virtual bool IsSitting
+		{
+			get { return false; }
+			set { }
+		}
+		/// <summary>
+		/// Gets the Living's ground-target Coordinate inside the current Region
+		/// </summary>
+		public virtual Point3D GroundTarget
+		{
+			get { return m_groundTarget; }
+		}
 
         /// <summary>
         /// Sets the Living's ground-target Coordinates inside the current Region
@@ -4143,9 +3967,9 @@ namespace DOL.GS
 			m_healthRegenerationTimer = null;
 			m_powerRegenerationTimer = null;
 			m_enduRegenerationTimer = null;
-
-            return true;
-        }
+			TargetObject = null;
+			return true;
+		}
 
         #endregion Region
 
@@ -4388,52 +4212,31 @@ namespace DOL.GS
             set { m_group = value; }
         }
 
-        /// <summary>
-        /// Gets or sets the index of this living inside of the group
-        /// </summary>
-        public byte GroupIndex
-        {
-            get { return m_groupIndex; }
-            set { m_groupIndex = value; }
-        }
+		/// <summary>
+		/// Gets or sets the index of this living inside of the group
+		/// </summary>
+		public byte GroupIndex
+		{
+			get { return m_groupIndex; }
+			set { m_groupIndex = value; }
+		}
+		#endregion
 
-        #endregion Group
+		/// <summary>
+		/// Constructor to create a new GameLiving
+		/// </summary>
+		public GameLiving() : base()
+		{
+			attackComponent = new AttackComponent(this);
+			rangeAttackComponent = new RangeAttackComponent(this);
+			styleComponent = new StyleComponent(this);
+			castingComponent = CastingComponent.Create(this);
+			effectListComponent = new EffectListComponent(this);
+			movementComponent = MovementComponent.Create(this);
+			healthComponent = new HealthComponent(this);
 
-        /// <summary>
-        /// Handle event notifications.
-        /// </summary>
-        /// <param name="e"></param>
-        /// <param name="sender"></param>
-        /// <param name="args"></param>
-        public override void Notify(DOLEvent e, object sender, EventArgs args)
-        {
-            if (e == GameLivingEvent.Interrupted && args != null)
-            {
-                if (CurrentSpellHandler != null)
-                    CurrentSpellHandler.CasterIsAttacked((args as InterruptedEventArgs).Attacker);
-
-                return;
-            }
-
-            base.Notify(e, sender, args);
-        }
-
-        /// <summary>
-        /// Constructor to create a new GameLiving
-        /// </summary>
-        public GameLiving() : base()
-        {
-            attackComponent = new AttackComponent(this);
-            rangeAttackComponent = new RangeAttackComponent(this);
-            styleComponent = new StyleComponent(this);
-            castingComponent = CastingComponent.Create(this);
-            effectListComponent = new EffectListComponent(this);
-            movementComponent = MovementComponent.Create(this);
-            healthComponent = new HealthComponent(this);
-
-            m_guildName = string.Empty;
-            m_targetObjectWeakReference = new WeakRef(null);
-            m_groundTarget = new Point3D(0, 0, 0);
+			m_guildName = string.Empty;
+			m_groundTarget = new Point3D(0, 0, 0);
 
             //Set all combat properties
             m_activeWeaponSlot = eActiveWeaponSlot.Standard;

@@ -73,7 +73,7 @@ namespace DOL.AI.Brain
 			{
 				Body.Delete();
 				Body = null;
-				if (m_owner != null && m_owner.TempProperties.GetProperty<bool>(HAS_PET, false))
+				if (m_owner != null && m_owner.TempProperties.GetProperty<bool>(HAS_PET))
 				{
 					m_owner.TempProperties.SetProperty(HAS_PET, false);
 				}

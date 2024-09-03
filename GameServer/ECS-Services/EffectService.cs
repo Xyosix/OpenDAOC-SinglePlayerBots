@@ -62,29 +62,31 @@ namespace DOL.GS
         private static void HandlePropertyModification(ECSGameEffect e)
         {
             if (e.Owner == null)
-            {
-                //Console.WriteLine($"Invalid target for Effect {e}");
                 return;
-            }
 
-            ECSGameSpellEffect spellEffect = e as ECSGameSpellEffect;
             EffectListComponent effectList = e.Owner.effectListComponent;
 
             if (effectList == null)
-            {
-                //Console.WriteLine($"No effect list found for {e.Owner}");
                 return;
-            }
+
+            ECSGameSpellEffect spellEffect = e as ECSGameSpellEffect;
+
             // Early out if we're trying to add an effect that is already present.
-            else if (!effectList.AddEffect(e))
+            if (!effectList.AddEffect(e))
             {
-                if (spellEffect != null && !spellEffect.SpellHandler.Spell.IsPulsing)
+                // Temporarily include `BleedECSEffect` since they're set as pulsing spells in the DB, even though they should work like DoTs instead.
+                if (spellEffect != null && (!spellEffect.SpellHandler.Spell.IsPulsing || spellEffect is BleedECSEffect))
                 {
-                    SendSpellResistAnimation(e as ECSGameSpellEffect);
-                    if (spellEffect.SpellHandler.Caster is GameSummonedPet petCaster && petCaster.Owner is GamePlayer casterOwner)
-                        ChatUtil.SendResistMessage(casterOwner, "GamePlayer.Caster.Buff.EffectAlreadyActive", e.Owner.GetName(0, true));
+                    SendSpellResistAnimation(spellEffect);
+                    GamePlayer playerToNotify = null;
+
                     if (spellEffect.SpellHandler.Caster is GamePlayer playerCaster)
-                        ChatUtil.SendResistMessage(playerCaster, "GamePlayer.Caster.Buff.EffectAlreadyActive", e.Owner.GetName(0, true));
+                        playerToNotify = playerCaster;
+                    else if (spellEffect.SpellHandler.Caster is GameNPC npcCaster && npcCaster.Brain is IControlledBrain brain && brain.Owner is GamePlayer casterOwner)
+                        playerToNotify = casterOwner;
+
+                    if (playerToNotify != null)
+                        ChatUtil.SendResistMessage(playerToNotify, "GamePlayer.Caster.Buff.EffectAlreadyActive", spellEffect.Owner.GetName(0, true));
                 }
 
                 return;
@@ -206,10 +208,10 @@ namespace DOL.GS
             }
         }
 
-        private static void HandleCancelEffect(ECSGameEffect e)
+        private static bool HandleCancelEffect(ECSGameEffect e)
         {
             if (!e.Owner.effectListComponent.RemoveEffect(e))
-                return;
+                return false;
 
             if (e is ECSGameSpellEffect spellEffect)
             {
@@ -278,6 +280,8 @@ namespace DOL.GS
             }
             else if (e.Owner is GameNPC npc && npc.Brain is IControlledBrain npcBrain)
                 npcBrain.UpdatePetWindow();
+
+            return true;
         }
 
         /// <summary>
@@ -325,10 +329,10 @@ namespace DOL.GS
         /// <summary>
         /// Immediately removes an ECSGameEffect.
         /// </summary>
-        public static void RequestImmediateCancelEffect(ECSGameEffect effect, bool playerCanceled = false)
+        public static bool RequestImmediateCancelEffect(ECSGameEffect effect, bool playerCanceled = false)
         {
             if (effect is null)
-                return;
+                return false;
 
             // Player can't remove negative effect or Effect in Immunity State
             if (playerCanceled && ((!effect.HasPositiveEffect) || effect is ECSImmunityEffect))
@@ -336,13 +340,13 @@ namespace DOL.GS
                 if (effect.Owner is GamePlayer player)
                     player.Out.SendMessage(LanguageMgr.GetTranslation((effect.Owner as GamePlayer).Client, "Effects.GameSpellEffect.CantRemoveEffect"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
 
-                return;
+                return false;
             }
 
             // playerCanceled param isn't used but it's there in case we eventually want to...
             effect.CancelEffect = true;
             effect.ExpireTick = GameLoop.GameLoopTime - 1;
-            HandleCancelEffect(effect);
+            return HandleCancelEffect(effect);
         }
 
         /// <summary>
@@ -409,7 +413,7 @@ namespace DOL.GS
             }
         }
 
-        public static eEffect GetEffectFromSpell(Spell spell, bool isBaseLine = true)
+        public static eEffect GetEffectFromSpell(Spell spell)
         {
             switch (spell.SpellType)
             {
@@ -454,10 +458,12 @@ namespace DOL.GS
                     return eEffect.AcuityBuff;
                 case eSpellType.ArmorAbsorptionBuff:
                     return eEffect.ArmorAbsorptionBuff;
+                case eSpellType.BaseArmorFactorBuff:
+                    return eEffect.BaseAFBuff;
+                case eSpellType.SpecArmorFactorBuff:
+                    return eEffect.SpecAFBuff;
                 case eSpellType.PaladinArmorFactorBuff:
                     return eEffect.PaladinAf;
-                case eSpellType.ArmorFactorBuff:
-                    return isBaseLine ? eEffect.BaseAFBuff : eEffect.SpecAFBuff;
 
                 // Resists.
                 case eSpellType.BodyResistBuff:
@@ -628,6 +634,8 @@ namespace DOL.GS
                 case eSpellType.SummonNecroPet:
                 case eSpellType.SummonCommander:
                 case eSpellType.SummonMinion:
+                case eSpellType.SummonJuggernaut:
+                case eSpellType.SummonAnimistAmbusher:
                     return eEffect.Pet;
 
                 default:
@@ -890,9 +898,6 @@ namespace DOL.GS
         /// </summary>
         public static void SaveAllEffects(GamePlayer player)
         {
-            if (player == null || player.effectListComponent.GetAllEffects().Count == 0)
-                return;
-
             IList<DbPlayerXEffect> effs = DOLDB<DbPlayerXEffect>.SelectObjects(DB.Column("ChardID").IsEqualTo(player.ObjectId));
             if (effs != null)
                 GameServer.Database.DeleteObject(effs);

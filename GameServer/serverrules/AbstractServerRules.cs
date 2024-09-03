@@ -1164,7 +1164,7 @@ namespace DOL.GS.ServerRules
 
 					if (player != null)
 					{
-						BattleGroup clientBattleGroup = ((GameLiving)player).TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY, null);
+						BattleGroup clientBattleGroup = ((GameLiving)player).TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY);
 						if (clientBattleGroup != null)
 						{
 							livingsToAward.Add(living);
@@ -1255,11 +1255,14 @@ namespace DOL.GS.ServerRules
 
 			long campBonus = CalculateCampBonus();
 			long groupBonus = CalculateGroupBonus();
+			long guildBonus = CalculateGuildBonus();
+			long bafBonus = CalculateBafBonus();
 			long outpostBonus = CalculateOutpostBonus();
-			long totalReward = baseXpReward + campBonus + groupBonus + outpostBonus;
+			GainedExperienceEventArgs arguments = new(baseXpReward, campBonus, groupBonus, guildBonus, bafBonus, outpostBonus, true, true, eXPSource.NPC);
+			long totalReward = arguments.ExpTotal;
 
 			ShowXpStatsToPlayer();
-			living.GainExperience(eXPSource.NPC, totalReward, campBonus, groupBonus, outpostBonus, true, true, true); // XP Rate is handled in GainExperience
+			living.GainExperience(arguments);
 
 			void RewardRealmPoints()
 			{
@@ -1464,12 +1467,28 @@ namespace DOL.GS.ServerRules
 
 			long CalculateGroupBonus()
 			{
-				long groupBonus = 0;
+				if (player.Group == null || plrGrpExp.ContainsKey(player.Group))
+					return 0;
 
-				if (player.Group != null && plrGrpExp.ContainsKey(player.Group))
-					groupBonus = (long) (0.125 * baseXpReward * GetUniqueClassCount(player.Group));
+				// Group size is reduced by 1 to prevent the bonus from doing more than simply working against the base experience reduction done in `CalculateNpcExperienceValueModifiedByGroup`.
+				// For example, a bonus of 100% should nullify that reduction. If the group size wasn't reduced by 1, duos would actually gain more experience than solo players (ignoring other bonuses).
+				return (long) (baseXpReward * (player.Group.MemberCount - 1) * 0.125);
+			}
 
-				return groupBonus;
+			long CalculateGuildBonus()
+			{
+				if (player.Guild == null || player.Guild.BonusType is not Guild.eBonusType.Experience)
+					return 0;
+
+				return (long) (baseXpReward * Properties.GUILD_BUFF_XP * 0.01);
+			}
+
+			long CalculateBafBonus()
+			{
+				if (killedNPC.Brain is not StandardMobBrain brain)
+					return 0;
+
+				return (long) (baseXpReward * brain.BafAddCount * 0.075);
 			}
 
 			long CalculateOutpostBonus()
@@ -1526,6 +1545,8 @@ namespace DOL.GS.ServerRules
 					double levelPercent = (double) (gplayer.Experience + totalReward - gplayer.ExperienceForCurrentLevel) / (gplayer.ExperienceForNextLevel - gplayer.ExperienceForCurrentLevel) * 100.0;
 					double campPercent = (double) campBonus / baseXpReward * 100.0;
 					double groupPercent = (double) groupBonus / baseXpReward * 100.0;
+					double guildPercent = (double) guildBonus / baseXpReward * 100.0;
+					double bafPercent = (double) bafBonus / baseXpReward * 100.0;
 					double outpostPercent = (double) outpostBonus / baseXpReward * 100.0;
 
 					player.Out.SendMessage($"XP needed: {gplayer.ExperienceForNextLevel.ToString("N0", format)} | {levelPercent:0.##}% done with current level", eChatType.CT_System, eChatLoc.CL_SystemWindow);
@@ -1537,22 +1558,17 @@ namespace DOL.GS.ServerRules
 					if (groupBonus > 0)
 						player.Out.SendMessage($"Group: {groupBonus.ToString("N0", format)} | {groupPercent:0.##}% bonus", eChatType.CT_System, eChatLoc.CL_SystemWindow);
 
+					if (guildBonus > 0)
+						player.Out.SendMessage($"Guild: {guildBonus.ToString("N0", format)} | {guildPercent:0.##}% bonus", eChatType.CT_System, eChatLoc.CL_SystemWindow);
+
+					if (bafPercent > 0)
+						player.Out.SendMessage($"BaF: {bafBonus.ToString("N0", format)} | {bafPercent:0.##}% bonus", eChatType.CT_System, eChatLoc.CL_SystemWindow);
+
 					if (outpostBonus > 0)
 						player.Out.SendMessage($"Outpost: {outpostBonus.ToString("N0", format)} | {outpostPercent:0.##}% bonus", eChatType.CT_System, eChatLoc.CL_SystemWindow);
 				}
 			}
 		}
-
-		private int GetUniqueClassCount(Group group)
-        {
-			HashSet<eCharacterClass> groupClasses = new HashSet<eCharacterClass>();
-			foreach (IGamePlayer player in group.GetIPlayersInTheGroup().ToList())
-			{
-				groupClasses.Add((eCharacterClass)player.CharacterClass.ID);
-			}
-
-			return groupClasses.Count;
-        }
 
 		/// <summary>
 		/// Called on living death that is not gameplayer or gamenpc
@@ -1642,7 +1658,7 @@ namespace DOL.GS.ServerRules
 					{
 						lock (killerPlayer.Group)
 						{
-							int count = 0;
+							int count = -1;
 							foreach (IGamePlayer player in killerPlayer.Group.GetIPlayersInTheGroup())
 							{
 								if (!((GameLiving)player).IsWithinRadius(killedLiving, WorldMgr.MAX_EXPFORKILL_DISTANCE)) continue;
@@ -1827,31 +1843,9 @@ namespace DOL.GS.ServerRules
 
 				double damagePercent = (float)de.Value / totalDamage;
 
-				if (expGainPlayer?.GetConLevel(killedPlayer) > -3)
-				{
-					expGainPlayer.KillStreak++;
-					expGainPlayer.Out.SendMessage($"Kill Streak: {expGainPlayer.KillStreak}", eChatType.CT_ScreenCenterSmaller, eChatLoc.CL_SystemWindow);
-				}
-
 				// realm points
 				int rpCap = living.RealmPointsValue * 2;
 				int realmPoints = (int)(playerRPValue * damagePercent);
-
-                switch (expGainPlayer?.GetConLevel(killedPlayer))
-                {
-					case <= -3:
-						rpCap = 0;
-						expGainPlayer.Out.SendMessage("You shamefully killed a defenseless opponent and gain no realm points from this kill!", eChatType.CT_System, eChatLoc.CL_SystemWindow);
-						break;
-					case -2:
-						rpCap /= 4;
-						break;
-					case -1:
-						rpCap /= 2;
-						break;
-					default:
-						break;
-                }
 
 				//moved to after realmPoints assignment so that dead players retain full RP
 				if (!living.IsAlive)//Dead living gets 25% exp only
@@ -1872,8 +1866,8 @@ namespace DOL.GS.ServerRules
 						{
 							lock (killerPlayer.Group)
 							{
-								int count = 0;
-								foreach (GamePlayer player in killerPlayer.Group.GetPlayersInTheGroup())
+								int count = -1;
+								foreach (IGamePlayer player in killerPlayer.Group.GetIPlayersInTheGroup())
 								{
 									if (!player.IsWithinRadius(killedPlayer, WorldMgr.MAX_EXPFORKILL_DISTANCE)) continue;
 									count++;
@@ -1881,14 +1875,20 @@ namespace DOL.GS.ServerRules
 								realmPoints = (int)(realmPoints * (1.0 + count * 0.125));
 
 							}
-							if (!groupsToAward.Contains(killerPlayer.Group)){ groupsToAward.Add(killerPlayer.Group); }
-						} else if (!playersToAward.Contains(killerPlayer))
+							if (!groupsToAward.Contains(killerPlayer.Group))
+							{ 
+								groupsToAward.Add(killerPlayer.Group);
+							}
+						} 
+						else if (!playersToAward.Contains(killerPlayer))
                         {
 							playersToAward.Add(killerPlayer);
 						}
 					}
+
 					if (realmPoints > rpCap)
 						realmPoints = rpCap;
+
 					if (realmPoints > 0)
 					{
 						if (living is GamePlayer p)
@@ -1904,26 +1904,8 @@ namespace DOL.GS.ServerRules
 				int bpCap = living.BountyPointsValue * 2;
 				int bountyPoints = (int)(playerBPValue * damagePercent);
 
-				switch (expGainPlayer?.GetConLevel(killedPlayer))
-				{
-					case <= -3:
-						bpCap = 0;
-						expGainPlayer.Out.SendMessage("You killed a defenseless opponent and gain no bps from this kill, you animal!", eChatType.CT_System, eChatLoc.CL_SystemWindow);
-						break;
-					case -2:
-						bpCap /= 4;
-						break;
-					case -1:
-						bpCap /= 2;
-						break;
-					default:
-						break;
-				}
-
 				if (bountyPoints > bpCap)
 					bountyPoints = bpCap;
-
-				
 
 				//FIXME: [WARN] this is guessed, i do not believe this is the right way, we will most likely need special messages to be sent
 				//apply the keep bonus for bounty points
@@ -1943,24 +1925,7 @@ namespace DOL.GS.ServerRules
 				// experience
 				// TODO: pets take 25% and owner gets 75%
 				long xpReward = (long)(playerExpValue * damagePercent); // exp for damage percent
-
 				long expCap = (long)(living.ExperienceValue * ServerProperties.Properties.XP_PVP_CAP_PERCENT / 100);
-
-				switch (expGainPlayer?.GetConLevel(killedPlayer))
-				{
-					case <= -3:
-						expCap = 0;
-						expGainPlayer.Out.SendMessage("No experience points awarded for killing greys, you degenerate.", eChatType.CT_System, eChatLoc.CL_SystemWindow);
-						break;
-					case -2:
-						expCap /= 4;
-						break;
-					case -1:
-						expCap /= 2;
-						break;
-					default:
-						break;
-				}
 
 				if (xpReward > expCap)
 					xpReward = expCap;
@@ -2004,23 +1969,9 @@ namespace DOL.GS.ServerRules
 					{
 						money += 20 * money / 100;
 					}
-					
-					int killBonus = (int)((0.05 * (player.KillStreak > 10 ? 10 : player.KillStreak)) * money);
 
-					if (killBonus > 0)
-					{
-						money += killBonus;
-						//long money = (long)(Money.GetMoney(0, 0, 17, 85, 0) * damagePercent * killedPlayer.Level / 50);
-						player.AddMoney(money, "You receive {0} ("+ Money.GetShortString(killBonus) +" streak bonus)");
-						InventoryLogging.LogInventoryAction(killer, player, eInventoryActionType.Other, money);
-					}
-					else
-					{
-						player.AddMoney(money, "You receive {0}");
-						InventoryLogging.LogInventoryAction(killer, player, eInventoryActionType.Other, money);
-					}
-					
-					
+					player.AddMoney(money, "You receive {0}");
+					InventoryLogging.LogInventoryAction(killer, player, eInventoryActionType.Other, money);
 				}
 
 				if (killedPlayer.ReleaseType != eReleaseType.Duel && expGainPlayer != null)
@@ -2077,64 +2028,10 @@ namespace DOL.GS.ServerRules
 					}
 				}
 			}
-            
-            killedPlayer.DeathsPvP++;
 
-			//for each group member, a 50% chance to get a ROG
-            foreach (var grp in groupsToAward)
-            {
-				List<GamePlayer> players = new List<GamePlayer>();
-				foreach (GamePlayer pla in grp.GetPlayersInTheGroup())
-                {
-                    if (!playersToAward.Contains(pla))
-                    {
-						playersToAward.Add(pla);
-					}
-					//players.Add(pla);
-                }
-				//GamePlayer playerToAward = players[Util.Random(players.Count - 1)];
-				//Console.WriteLine($"Chosen player: {playerToAward}");
-				//if (!playersToAward.Contains(playerToAward) ) playersToAward.Add(playerToAward);
-            }
+			killedPlayer.DeathsPvP++;
 
-			//distribute ROGs
-
-            foreach (var player in playersToAward)
-            {
-                if (player.Level < 35 || player.GetDistanceTo(killedPlayer) > WorldMgr.MAX_EXPFORKILL_DISTANCE || player.GetConLevel(killedPlayer) <= -3) continue;
-                
-                if (GameServer.Instance.Configuration.ServerType != EGameServerType.GST_PvP)
-                {
-	                AtlasROGManager.GenerateOrbAmount(player, Util.Random(50, 150));
-                }
-
-                int bonusRegion = 0;
-                switch (ZoneBonusRotator.GetCurrentBonusRealm())
-                {
-	                case eRealm.Albion:
-		                bonusRegion = 1;
-		                break;
-	                case eRealm.Hibernia:
-		                bonusRegion = 200;
-		                break;
-	                case eRealm.Midgard:
-		                bonusRegion = 100;
-		                break;
-                }
-                
-                if (player.CurrentZone.ZoneRegion.ID == bonusRegion && Util.Chance(10))
-                {
-	                var RRMod = (int)Math.Floor(killedPlayer.RealmLevel / 10d) * 3;
-	                AtlasROGManager.GenerateROG(player, (byte)(player.Level + RRMod));
-                }
-
-                if (player.CurrentZone.ZoneRegion.ID == bonusRegion && Util.Chance(1))
-                {
-	                AtlasROGManager.GenerateBeetleCarapace(player);
-                }
-            }
-
-            if (ServerProperties.Properties.LOG_PVP_KILLS && playerKillers.Count > 0)
+			if (ServerProperties.Properties.LOG_PVP_KILLS && playerKillers.Count > 0)
 			{
 				try
 				{

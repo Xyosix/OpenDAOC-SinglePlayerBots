@@ -82,43 +82,34 @@ namespace DOL.GS.Spells
 
         ECSPulseEffect PulseEffect { get; }
 
-        /// <summary>
-        /// Determines wether new spell is better than existing one
-        /// important for overwriting
-        /// </summary>
-        /// <param name="oldeffect"></param>
-        /// <param name="neweffect"></param>
-        /// <returns>true if new spell is better version</returns>
-        bool IsNewEffectBetter(GameSpellEffect oldeffect, GameSpellEffect neweffect);
-
-        /// <summary>
-        /// Determines wether this spell is compatible with given spell
-        /// and therefore overwritable by better versions
-        /// spells that are overwritable do not stack
-        /// </summary>
-        /// <param name="compare"></param>
-        /// <returns></returns>
-        bool IsOverwritable(ECSGameSpellEffect compare);
-        /// <summary>
-        /// Determines wether new spell is better than old spell and should disable it
-        /// </summary>
-        /// <param name="oldeffect"></param>
-        /// <param name="neweffect"></param>
-        /// <returns></returns>
-        bool IsCancellableEffectBetter(GameSpellEffect oldeffect, GameSpellEffect neweffect);
-
-        /// <summary>
-        /// Determines wether this spell can be disabled
-        /// by better versions spells that stacks without overwriting
-        /// </summary>
-        /// <param name="compare"></param>
-        /// <returns></returns>
-        bool IsCancellable(GameSpellEffect compare);
-
-        /// <summary>
-        /// Can this SpellHandler Coexist with other Overwritable Spell Effect
-        /// </summary>
-        bool AllowCoexisting { get; }
+		/// <summary>
+		/// Determines wether this spell is compatible with given spell
+		/// and therefore overwritable by better versions
+		/// spells that are overwritable do not stack
+		/// </summary>
+		/// <param name="compare"></param>
+		/// <returns></returns>
+		bool IsOverwritable(ECSGameSpellEffect compare);
+		/// <summary>
+		/// Determines wether new spell is better than old spell and should disable it
+		/// </summary>
+		/// <param name="oldeffect"></param>
+		/// <param name="neweffect"></param>
+		/// <returns></returns>
+		bool IsCancellableEffectBetter(GameSpellEffect oldeffect, GameSpellEffect neweffect);
+		
+		/// <summary>
+		/// Determines wether this spell can be disabled
+		/// by better versions spells that stacks without overwriting
+		/// </summary>
+		/// <param name="compare"></param>
+		/// <returns></returns>
+		bool IsCancellable(GameSpellEffect compare);
+		
+		/// <summary>
+		/// Can this SpellHandler Coexist with other Overwritable Spell Effect
+		/// </summary>
+		bool AllowCoexisting { get; }
 
 		long CastStartTick { get; }
 		/// <summary>

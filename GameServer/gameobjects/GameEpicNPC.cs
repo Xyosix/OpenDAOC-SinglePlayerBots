@@ -14,7 +14,7 @@ namespace DOL.GS
 
         public GameEpicNPC() : base()
         {
-            WeaponSkillScalingFactor = 60;
+            DamageFactor = 1.5;
             ArmorFactorScalingFactor = DefaultArmorFactorScalingFactor;
         }
 
@@ -56,7 +56,7 @@ namespace DOL.GS
                     realmLoyalty = (int)Math.Round(20 * (numCurrentLoyalDays / 30.0));
 
                 string achievementMob = Regex.Replace(Name, @"\s+", "");
-                BattleGroup killerBG = playerKiller?.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY, null);
+                BattleGroup killerBG = playerKiller?.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY);
 
                 if (killerBG != null)
                 {

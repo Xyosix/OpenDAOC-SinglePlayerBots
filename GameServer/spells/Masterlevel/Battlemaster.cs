@@ -115,7 +115,7 @@ namespace DOL.GS.Spells
             return Spell.Duration;
         }
 
-        public override int CalculateSpellResistChance(GameLiving target)
+        public override double CalculateSpellResistChance(GameLiving target)
         {
             return 0;
         }
@@ -329,11 +329,11 @@ namespace DOL.GS.Spells
 
             return base.CheckBeginCast(selectedTarget);
 		}
-		
+
         //Throw Weapon does not "resist"
-		public override int CalculateSpellResistChance(GameLiving target) 
-        { 
-            return 0; 
+		public override double CalculateSpellResistChance(GameLiving target)
+        {
+            return 0;
         }
 
         public override int OnEffectExpires(GameSpellEffect effect, bool noMessages)
@@ -450,11 +450,11 @@ namespace DOL.GS.Spells
                 case eAttackResult.Fumbled: player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.Attack.Fumble"), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow); break;
                 case eAttackResult.HitStyle:
                 case eAttackResult.HitUnstyled:
-					string modmessage = "";
+					string modmessage = string.Empty;
 					if (ad.Modifier > 0) modmessage = " (+" + ad.Modifier + ")";
 					if (ad.Modifier < 0) modmessage = " (" + ad.Modifier + ")";
 
-					string hitWeapon = "";
+					string hitWeapon = string.Empty;
 
 					switch (ServerProperties.Properties.SERV_LANGUAGE)
 					{
@@ -553,7 +553,7 @@ namespace DOL.GS.Spells
                 Target = target,
                 Damage = 0,
                 CriticalDamage = 0,
-                WeaponSpeed = player.AttackSpeed(weapon),
+                Interval = player.AttackSpeed(weapon),
                 DamageType = player.attackComponent.AttackDamageType(weapon),
                 Weapon = weapon,
                 IsOffHand = weapon.Hand == 2
@@ -665,7 +665,7 @@ namespace DOL.GS.Spells
     [SpellHandlerAttribute("EssenceSearHandler")]
     public class EssenceSearHandler : SpellHandler
     {
-        public override int CalculateSpellResistChance(GameLiving target) { return 0; }
+        public override double CalculateSpellResistChance(GameLiving target) { return 0; }
 
         public override void OnEffectStart(GameSpellEffect effect)
         {
@@ -756,7 +756,7 @@ namespace DOL.GS.Spells
     {
         protected int DexDebuff = 0;
         protected int QuiDebuff = 0;
-        public override int CalculateSpellResistChance(GameLiving target) { return 0; }
+        public override double CalculateSpellResistChance(GameLiving target) { return 0; }
 
         public override void OnEffectStart(GameSpellEffect effect)
         {

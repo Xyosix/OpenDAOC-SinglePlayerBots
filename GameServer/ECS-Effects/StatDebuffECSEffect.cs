@@ -32,7 +32,7 @@ namespace DOL.GS
                 }
             }
 
-            eBuffBonusCategory debuffCategory = (Caster as IGamePlayer)?.CharacterClass is ClassChampion ? eBuffBonusCategory.SpecDebuff : eBuffBonusCategory.Debuff;
+            eBuffBonusCategory debuffCategory = (SpellHandler.Caster as IGamePlayer)?.CharacterClass is ClassChampion ? eBuffBonusCategory.SpecDebuff : eBuffBonusCategory.Debuff;
 
             if (EffectType == eEffect.StrConDebuff || EffectType == eEffect.DexQuiDebuff)
             {
@@ -47,7 +47,7 @@ namespace DOL.GS
                 if (EffectType == eEffect.MovementSpeedDebuff)
                 {
                     //// Cannot apply if the effect owner has a charging effect
-                    //if (effect.Owner.EffectList.GetOfType<ChargeEffect>() != null || effect.Owner.TempProperties.getProperty("Charging", false))
+                    //if (effect.Owner.EffectList.GetOfType<ChargeEffect>() != null || effect.Owner.TempProperties.GetProperty<bool>("Charging"))
                     //{
                     //    MessageToCaster(effect.Owner.Name + " is moving too fast for this spell to have any effect!", eChatType.CT_SpellResisted);
                     //    return;
@@ -100,7 +100,7 @@ namespace DOL.GS
 
         public override void OnStopEffect()
         {
-            eBuffBonusCategory debuffCategory = (Caster as IGamePlayer)?.CharacterClass is ClassChampion ? eBuffBonusCategory.SpecDebuff : eBuffBonusCategory.Debuff;
+            eBuffBonusCategory debuffCategory = (SpellHandler.Caster as IGamePlayer)?.CharacterClass is ClassChampion ? eBuffBonusCategory.SpecDebuff : eBuffBonusCategory.Debuff;
 
             if (EffectType == eEffect.StrConDebuff || EffectType == eEffect.DexQuiDebuff)
             {

@@ -39,7 +39,6 @@ namespace DOL.AI.Brain
             FSM.Add(new StandardMobState_RETURN_TO_SPAWN(this));
             FSM.Add(new StandardMobState_PATROLLING(this));
             FSM.Add(new StandardMobState_ROAMING(this));
-            FSM.Add(new StandardMobState_DEAD(this));
             FSM.SetCurrentState(eFSMStateType.WAKING_UP);
         }
 
@@ -282,7 +281,7 @@ namespace DOL.AI.Brain
         {
             if (aggroAmount > 0)
             {
-                foreach (ProtectECSGameEffect protect in living.effectListComponent.GetAbilityEffects().Where(e => e.EffectType == eEffect.Protect))
+                foreach (ProtectECSGameEffect protect in living.effectListComponent.GetAbilityEffects().Where(e => e.EffectType is eEffect.Protect))
                 {
                     if (protect.Target != living)
                         continue;
@@ -407,7 +406,7 @@ namespace DOL.AI.Brain
         /// </summary>
         public virtual void ClearAggroList()
         {
-            CanBAF = true; // Mobs that drop out of combat can BAF again.
+            CanBaf = true; // Mobs that drop out of combat can BAF again.
             AggroList.Clear();
 
             lock (((ICollection) OrderedAggroList).SyncRoot)
@@ -647,30 +646,27 @@ namespace DOL.AI.Brain
 
         #region Bring a Friend
 
-        /// <summary>
-        /// Max range to try to get BAFs from.
-        /// May be overloaded for specific brain types, ie.dragons or keep guards
-        /// </summary>
-        protected virtual ushort BAFMaxRange => 2000;
+        private bool _canBaf = true;
 
-        /// <summary>
-        /// Max range to try to look for nearby players.
-        /// May be overloaded for specific brain types, ie.dragons or keep guards
-        /// </summary>
-        protected virtual ushort BAFPlayerRange => 5000;
+        public int BafAddCount { get; private set; } // Used for experience bonus. Reset anytime `CanBaf` is modified.
+        protected static ushort BAF_MIN_RADIUS => 450; // BaF radius for a solo player (assuming solo players are allowed to trigger BaF).
+        protected static ushort BAF_EXTRA_RADIUS_PER_OTHER_PLAYER => 150; // Caps at 8 players.
+        protected static double BAF_RADIUS_DUNGEON_MODIFIER => 0.5;
 
-        /// <summary>
-        /// Can the mob bring a friend?
-        /// Set to false when a mob BAFs or is brought by a friend.
-        /// </summary>
-        public virtual bool CanBAF { get; set; } = true;
+        public virtual bool CanBaf
+        {
+            // Prevent NPCs that were charmed from initiating a BaF or replying to one.
+            get => _canBaf && GameLoop.GameLoopTime - GameNPC.CHARMED_NOEXP_TIMEOUT >= Body.TempProperties.GetProperty<long>(GameNPC.CHARMED_TICK_PROP);
+            set
+            {
+                _canBaf = value;
+                BafAddCount = 0;
+            }
+        }
 
-        /// <summary>
-        /// Bring friends when this mob aggros
-        /// </summary>
         protected virtual void BringFriends(GameLiving puller)
         {
-            if (!CanBAF || Body.Faction == null)
+            if (!CanBaf || Body.Faction == null)
                 return;
 
             IGamePlayer playerPuller;
@@ -695,13 +691,21 @@ namespace DOL.AI.Brain
                  return;
 
             _ = new ResetBafPropertyAction((GameObject)playerPuller);
-            CanBAF = false; // Mobs only BAF once per fight
-            int maxAdds = GetMaxAddsCountFromBaf(puller, out List<IGamePlayer> otherTargets);
-            IEnumerable<StandardMobBrain> brainsInRadius = GetFriendlyAndAvailableBrainsInRadiusOrderedByDistance(BAFMaxRange, maxAdds);
+            CanBaf = false; // Mobs only BAF once per fight.
+            int maxAdds = GetMaxAddsCountFromBaf(puller, out List<IGamePlayer> otherTargets, out int attackersCount);
+            int bafRadius = BAF_MIN_RADIUS + (Math.Min(8, attackersCount) - 1) * BAF_EXTRA_RADIUS_PER_OTHER_PLAYER;
+
+            if (Body.CurrentZone.IsDungeon)
+                bafRadius = (int) (bafRadius * BAF_RADIUS_DUNGEON_MODIFIER);
+
+            IEnumerable<StandardMobBrain> brainsInRadius = GetFriendlyAndAvailableBrainsInRadiusOrderedByDistance(bafRadius, maxAdds);
+            int addCount = brainsInRadius.Count();
+            BafAddCount = addCount;
 
             foreach (StandardMobBrain brain in brainsInRadius)
             {
-                brain.CanBAF = false;
+                brain.CanBaf = false;
+                brain.BafAddCount = addCount;
                 GameLiving target;
 
                 if (otherTargets != null && otherTargets.Count > 1)
@@ -712,13 +716,13 @@ namespace DOL.AI.Brain
                 brain.AddToAggroList(target, 1);
             }
 
-            int GetMaxAddsCountFromBaf(GameLiving puller, out List<IGamePlayer> otherTargets)
+            static int GetMaxAddsCountFromBaf(GameLiving puller, out List<IGamePlayer> otherTargets, out int attackersCount)
             {
-                int numAttackers = 0;
+                attackersCount = 0;
                 otherTargets = null;
                 HashSet<string> countedVictims = null;
                 HashSet<string> countedAttackers = null;
-                BattleGroup bg = puller.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY, null);
+                BattleGroup bg = puller.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY);
 
                 if (puller.Group is Group group)
                 {
@@ -738,9 +742,9 @@ namespace DOL.AI.Brain
 
                     foreach (IGamePlayer playerInGroup in group.GetIPlayersInTheGroup())
                     {
-                        if (playerInGroup != null && (playerInGroup.InternalID == puller.InternalID || playerInGroup.IsWithinRadius(puller, BAFPlayerRange, true)))
+                        if (playerInGroup != null && (playerInGroup.InternalID == puller.InternalID || playerInGroup.IsWithinRadius(puller, WorldMgr.VISIBILITY_DISTANCE, true)))
                         {
-                            numAttackers++;
+                            attackersCount++;
                             countedAttackers?.Add(playerInGroup.InternalID);
 
                             if (otherTargets != null)
@@ -759,10 +763,10 @@ namespace DOL.AI.Brain
 
                     foreach (IGamePlayer player2 in bg.Members.Keys)
                     {
-                        if (player2 != null && (player2.InternalID == puller.InternalID || player2.IsWithinRadius(puller, BAFPlayerRange, true)))
+                        if (player2 != null && (player2.InternalID == puller.InternalID || player2.IsWithinRadius(puller, WorldMgr.VISIBILITY_DISTANCE, true)))
                         {
                             if (Properties.BAF_MOBS_COUNT_BG_MEMBERS && (countedAttackers == null || !countedAttackers.Contains(player2.InternalID)))
-                                numAttackers++;
+                                attackersCount++;
 
                             if (otherTargets != null && (countedVictims == null || !countedVictims.Contains(player2.InternalID)))
                                 otherTargets.Add(player2);
@@ -771,10 +775,10 @@ namespace DOL.AI.Brain
                 }
 
                 // Player is alone.
-                if (numAttackers == 0)
-                    numAttackers = 1;
+                if (attackersCount == 0)
+                    attackersCount = 1;
 
-                int percentBAF = Properties.BAF_INITIAL_CHANCE + (numAttackers - 1) * Properties.BAF_ADDITIONAL_CHANCE;
+                int percentBAF = Properties.BAF_INITIAL_CHANCE + (attackersCount - 1) * Properties.BAF_ADDITIONAL_CHANCE;
                 int maxAdds = percentBAF / 100; // Multiple of 100 are guaranteed BAFs.
 
                 // Calculate chance of an addition add based on the remainder.
@@ -785,9 +789,9 @@ namespace DOL.AI.Brain
             }
         }
 
-        public IEnumerable<StandardMobBrain> GetFriendlyAndAvailableBrainsInRadiusOrderedByDistance(ushort radius, int count)
+        public IEnumerable<StandardMobBrain> GetFriendlyAndAvailableBrainsInRadiusOrderedByDistance(int radius, int count)
         {
-            return Body.GetNPCsInRadius(radius).Where(WherePredicate).OrderBy(OrderByPredicate).Take(count).Select(SelectPredicate);
+            return Body.GetNPCsInRadius((ushort) radius).Where(WherePredicate).OrderBy(OrderByPredicate).Take(count).Select(SelectPredicate);
 
             bool WherePredicate(GameNPC npc)
             {
@@ -942,7 +946,9 @@ namespace DOL.AI.Brain
                 case eSpellType.AFHitsBuff:
                 case eSpellType.AllMagicResistBuff:
                 case eSpellType.ArmorAbsorptionBuff:
-                case eSpellType.ArmorFactorBuff:
+                case eSpellType.BaseArmorFactorBuff:
+                case eSpellType.SpecArmorFactorBuff:
+                case eSpellType.PaladinArmorFactorBuff:
                 case eSpellType.BodyResistBuff:
                 case eSpellType.BodySpiritEnergyBuff:
                 case eSpellType.Buff:
@@ -970,7 +976,6 @@ namespace DOL.AI.Brain
                 case eSpellType.MeleeDamageBuff:
                 case eSpellType.MesmerizeDurationBuff:
                 case eSpellType.MLABSBuff:
-                case eSpellType.PaladinArmorFactorBuff:
                 case eSpellType.ParryBuff:
                 case eSpellType.PowerHealthEnduranceRegenBuff:
                 case eSpellType.PowerRegenBuff:
@@ -1143,7 +1148,7 @@ namespace DOL.AI.Brain
             if (target == null)
                 return true;
 
-            eEffect spellEffect = EffectService.GetEffectFromSpell(spell, m_mobSpellLine.IsBaseLine);
+            eEffect spellEffect = EffectService.GetEffectFromSpell(spell);
 
             // Ignore effects that aren't actually effects (may be incomplete).
             if (spellEffect is eEffect.DirectDamage or eEffect.Pet or eEffect.Unknown)
@@ -1181,7 +1186,7 @@ namespace DOL.AI.Brain
             // May not be the right place for that, but without that check NPCs with more than one offensive or defensive proc will only buff themselves once.
             if (spell.SpellType is eSpellType.OffensiveProc or eSpellType.DefensiveProc)
             {
-                if (target.effectListComponent.Effects.TryGetValue(EffectService.GetEffectFromSpell(spell, m_mobSpellLine.IsBaseLine), out List<ECSGameEffect> existingEffects))
+                if (target.effectListComponent.Effects.TryGetValue(EffectService.GetEffectFromSpell(spell), out List<ECSGameEffect> existingEffects))
                 {
                     if (existingEffects.FirstOrDefault(e => e.SpellHandler.Spell.ID == spell.ID || (spell.EffectGroup > 0 && e.SpellHandler.Spell.EffectGroup == spell.EffectGroup)) != null)
                         return true;
@@ -1196,7 +1201,7 @@ namespace DOL.AI.Brain
 
             bool HasImmunityEffect(eEffect immunityEffect)
             {
-                return immunityEffect != eEffect.Unknown && EffectListService.GetEffectOnTarget(target, immunityEffect) != null;
+                return immunityEffect is not eEffect.Unknown && EffectListService.GetEffectOnTarget(target, immunityEffect) != null;
             }
         }
 

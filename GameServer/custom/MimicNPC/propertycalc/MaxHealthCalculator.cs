@@ -29,7 +29,7 @@ namespace DOL.GS.Scripts
                     buffBonus = (int) ((1 + buffBonus / -100.0) * hpBase) - hpBase;
 
                 int itemBonus = player.ItemBonus[(int) property];
-                int cap = GetItemBonusCap(player) + GetItemBonusCapIncrease((GameLiving)player);
+                int cap = GetItemBonusCap(player) + GetItemBonusCapIncrease(player);
                 itemBonus = Math.Min(itemBonus, cap);
 
                 if (player.HasAbility(Abilities.ScarsOfBattle) && player.Level >= 40)

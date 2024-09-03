@@ -87,7 +87,7 @@ namespace DOL.GS.Spells
 				resurrectExpiredTimer.Stop();
 			}
 
-			GameLiving rezzer = player.TempProperties.GetProperty<GameLiving>(RESURRECT_CASTER_PROPERTY, null);
+			GameLiving rezzer = player.TempProperties.GetProperty<GameLiving>(RESURRECT_CASTER_PROPERTY);
 			if (!player.IsAlive)
 			{
 				if (rezzer == null)
@@ -213,7 +213,7 @@ namespace DOL.GS.Spells
 		/// <returns></returns>
 		protected virtual int ResurrectExpiredCallback(ECSGameTimer callingTimer)
 		{
-			GamePlayer player = callingTimer.Properties.GetProperty<GamePlayer>("targetPlayer", null);
+			GamePlayer player = callingTimer.Properties.GetProperty<GamePlayer>("targetPlayer");
 			if (player == null) return 0;
 			player.TempProperties.RemoveProperty(RESURRECT_CASTER_PROPERTY);
 			player.Out.SendMessage("Your resurrection spell has expired.", eChatType.CT_System, eChatLoc.CL_SystemWindow);
@@ -238,7 +238,7 @@ namespace DOL.GS.Spells
 				return false;
             }
 
-			GameLiving resurrectionCaster = target.TempProperties.GetProperty<GameLiving>(RESURRECT_CASTER_PROPERTY, null);
+			GameLiving resurrectionCaster = target.TempProperties.GetProperty<GameLiving>(RESURRECT_CASTER_PROPERTY);
 			if (resurrectionCaster != null)
 			{
 				//already considering resurrection - do nothing
@@ -256,7 +256,7 @@ namespace DOL.GS.Spells
 		/// <returns></returns>
 		public override bool CheckEndCast(GameLiving target)
 		{
-			GameLiving resurrectionCaster = target.TempProperties.GetProperty<GameLiving>(RESURRECT_CASTER_PROPERTY, null);
+			GameLiving resurrectionCaster = target.TempProperties.GetProperty<GameLiving>(RESURRECT_CASTER_PROPERTY);
 			if (resurrectionCaster != null)
 			{
 				//already considering resurrection - do nothing
@@ -291,7 +291,7 @@ namespace DOL.GS.Spells
 
 				var list = new List<string>();
 
-				list.Add("Function: " + (Spell.SpellType.ToString() == "" ? "(not implemented)" : Spell.SpellType.ToString()));
+				list.Add("Function: " + (Spell.SpellType.ToString() == string.Empty ? "(not implemented)" : Spell.SpellType.ToString()));
 				list.Add(" "); //empty line
 				list.Add(Spell.Description);
 				list.Add(" "); //empty line

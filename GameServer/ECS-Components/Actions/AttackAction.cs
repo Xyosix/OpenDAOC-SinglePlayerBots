@@ -19,7 +19,7 @@ namespace DOL.GS
         protected GameObject _target;
         protected double _effectiveness;
         protected int _ticksToTarget;
-        protected int _interruptDuration;
+        protected int _attackInterval;
         protected int _interval;
         private GameLiving _owner;
         private long _nextMeleeTick;
@@ -138,6 +138,11 @@ namespace DOL.GS
 
         public virtual void OnAimInterrupt(GameObject attacker) { }
 
+        public virtual bool OnOutOfRangeOrNoLosRangedAttack()
+        {
+            return true;
+        }
+
         private bool ShouldTick()
         {
             if (_owner.ObjectState != eObjectState.Active)
@@ -218,7 +223,7 @@ namespace DOL.GS
             if (_target is IGamePlayer playerTarget && playerTarget.IsSitting)
                 _effectiveness *= 2;
 
-            _interruptDuration = attackSpeed;
+            _attackInterval = attackSpeed;
             return true;
         }
 
@@ -257,7 +262,7 @@ namespace DOL.GS
             }
 
             _interval = attackSpeed;
-            _interruptDuration = _interval;
+            _attackInterval = _interval;
             _ticksToTarget = _owner.GetDistanceTo(_target) * 1000 / RangeAttackComponent.PROJECTILE_FLIGHT_SPEED;
             int model = _weapon == null ? 0 : _weapon.Model;
             byte flightDuration = (byte)(_ticksToTarget > 350 ? 1 + (_ticksToTarget - 350) / 75 : 1);
@@ -281,15 +286,9 @@ namespace DOL.GS
             {
                 case eRangedAttackType.Critical:
                 {
-                    double tmpEffectiveness = 2 - 0.3 * _owner.GetConLevel(_target);
-
-                    if (tmpEffectiveness > 2)
-                        _effectiveness *= 2;
-                    else if (tmpEffectiveness < 1.1)
-                        _effectiveness *= 1.1;
-                    else
-                        _effectiveness *= tmpEffectiveness;
-
+                    // Reduced effectiveness against higher level targets.
+                    double levelModifier = 2 + (_owner.EffectiveLevel - _target.EffectiveLevel) * 0.075;
+                    _effectiveness *= Math.Clamp(levelModifier, 1.1, 2.0);
                     break;
                 }
 
@@ -317,7 +316,7 @@ namespace DOL.GS
                     if (elapsedTime < rapidFireMaxDuration)
                     {
                         _effectiveness *= 0.25 + elapsedTime * 0.5 / rapidFireMaxDuration;
-                        _interruptDuration = (int)(_interruptDuration * _effectiveness);
+                        _attackInterval = (int) (_attackInterval * _effectiveness);
                     }
 
                     break;
@@ -343,13 +342,13 @@ namespace DOL.GS
 
         protected virtual void PerformMeleeAttack()
         {
-            AttackComponent.weaponAction = new WeaponAction(_owner, _target, _weapon, _leftWeapon, _effectiveness, _interruptDuration, _combatStyle);
+            AttackComponent.weaponAction = new WeaponAction(_owner, _target, _weapon, _leftWeapon, _effectiveness, _attackInterval, _combatStyle);
             AttackComponent.weaponAction.Execute();
         }
 
         protected virtual void PerformRangedAttack()
         {
-            AttackComponent.weaponAction = new WeaponAction(_owner, _target, _weapon, _effectiveness, _interruptDuration, _owner.rangeAttackComponent.RangedAttackType);
+            AttackComponent.weaponAction = new WeaponAction(_owner, _target, _weapon, _effectiveness, _attackInterval, _owner.rangeAttackComponent.RangedAttackType);
 
             if (_owner.rangeAttackComponent.RangedAttackType == eRangedAttackType.Critical)
                 _owner.rangeAttackComponent.RangedAttackType = eRangedAttackType.Normal;

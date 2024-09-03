@@ -38,10 +38,11 @@ namespace DOL.GS
         public ConcurrentDictionary<GameLiving, long> Attackers { get; } = new();
 
         private AttackersCheckTimer _attackersCheckTimer;
+        private BlockRoundHandler _blockRoundHandler;
 
-        public void AddAttacker(GameLiving target)
+        public void AddAttacker(AttackData attackData)
         {
-            if (target == owner)
+            if (attackData.Attacker == owner)
                 return;
 
             lock (_attackersCheckTimer.LockObject)
@@ -53,7 +54,12 @@ namespace DOL.GS
                 }
             }
 
-            Attackers.AddOrUpdate(target, Add, Update, GameLoop.GameLoopTime + 5000); // Use interrupt duration instead?
+            long duration = attackData.Interval;
+
+            if (duration <= 0)
+                duration = Properties.SPELL_INTERRUPT_DURATION;
+
+            Attackers.AddOrUpdate(attackData.Attacker, Add, Update, GameLoop.GameLoopTime + duration);
 
             static long Add(GameLiving key, long arg)
             {
@@ -69,17 +75,17 @@ namespace DOL.GS
         /// <summary>
         /// The target that was passed when 'StartAttackRequest' was called and the request accepted.
         /// </summary>
-        private GameObject m_startAttackTarget;
+        private GameObject _startAttackTarget;
 
         /// <summary>
         /// Actually a boolean. Use 'StartAttackRequested' to preserve thread safety.
         /// </summary>
-        private int m_startAttackRequested;
+        private int _startAttackRequested;
 
         public bool StartAttackRequested
         {
-            get => Interlocked.CompareExchange(ref m_startAttackRequested, 0, 0) == 1;
-            set => Interlocked.Exchange(ref m_startAttackRequested, Convert.ToInt32(value));
+            get => Interlocked.CompareExchange(ref _startAttackRequested, 0, 0) == 1;
+            set => Interlocked.Exchange(ref _startAttackRequested, Convert.ToInt32(value));
         }
 
         public AttackComponent(GameLiving owner)
@@ -87,6 +93,7 @@ namespace DOL.GS
             this.owner = owner;
             attackAction = AttackAction.Create(owner);
             _attackersCheckTimer = AttackersCheckTimer.Create(owner);
+            _blockRoundHandler = new(owner);
         }
 
         public void Tick()
@@ -112,48 +119,22 @@ namespace DOL.GS
         /// <summary>
         /// The chance for a critical hit
         /// </summary>
-        /// <param name="weapon">attack weapon</param>
         public int AttackCriticalChance(WeaponAction action, DbInventoryItem weapon)
         {
-            if (owner is IGamePlayer)
+            if (weapon == null)
+                return 0;
+
+            switch ((eInventorySlot) weapon.SlotPosition)
             {
-                if (weapon != null)
-                {
-                    if (weapon.Item_Type != Slot.RANGED)
-                    {
-                        return
-                            owner.GetModified(eProperty.CriticalMeleeHitChance);
-                    }
-                    else
-                    {
-                        if (action.RangedAttackType == eRangedAttackType.Critical)
-                            return 0;
-                        else
-                            return
-                                owner.GetModified(eProperty.CriticalArcheryHitChance);
-                    }
-                }
-
-                // Base of 10% critical chance.
-                return 10;
+                case eInventorySlot.RightHandWeapon:
+                case eInventorySlot.LeftHandWeapon:
+                case eInventorySlot.TwoHandWeapon:
+                    return owner.GetModified(eProperty.CriticalMeleeHitChance);
+                case eInventorySlot.DistanceWeapon:
+                    return action.RangedAttackType is eRangedAttackType.Critical ? 0 : owner.GetModified(eProperty.CriticalArcheryHitChance);
+                default:
+                    return 0;
             }
-
-            /// [Atlas - Takii] Wild Minion Implementation. We don't want any non-pet NPCs to crit.
-            /// We cannot reliably check melee vs ranged here since archer pets don't necessarily have a proper weapon with the correct slot type assigned.
-            /// Since Wild Minion is the only way for pets to crit and we (currently) want it to affect melee/ranged/spells, we can just rely on the Melee crit chance even for archery attacks
-            /// and as a result we don't actually need to detect melee vs ranged to end up with the correct behavior since all attack types will have the same % chance to crit in the end.
-            if (owner is GameNPC npc)
-            {
-                // Player-Summoned pet.
-                if (npc is GameSummonedPet summonedPet && summonedPet.Owner is IGamePlayer)
-                    return npc.GetModified(eProperty.CriticalMeleeHitChance);
-
-                // Charmed Pet.
-                if (npc.Brain is IControlledBrain charmedPetBrain && charmedPetBrain.GetPlayerOwner() != null)
-                    return npc.GetModified(eProperty.CriticalMeleeHitChance);
-            }
-
-            return 0;
         }
 
         /// <summary>
@@ -195,10 +176,13 @@ namespace DOL.GS
                 return eDamageType.Natural;
         }
 
-        /// <summary>
-        /// Gets the attack-state of this living
-        /// </summary>
-        public virtual bool AttackState { get; set; }
+        private bool _attackState;
+
+        public virtual bool AttackState
+        {
+            get => _attackState || StartAttackRequested;
+            set => _attackState = value;
+        }
 
         /// <summary>
         /// Gets which weapon was used for the last dual wield attack
@@ -291,7 +275,7 @@ namespace DOL.GS
                 }
                 else
                 {
-                    return owner.ActiveWeaponSlot == eActiveWeaponSlot.Distance
+                    return owner.ActiveWeaponSlot is eActiveWeaponSlot.Distance
                         ? Math.Max(32, (int) (2000.0 * owner.GetModified(eProperty.ArcheryRange) * 0.01))
                         : owner.MeleeAttackRange;
                 }
@@ -368,7 +352,7 @@ namespace DOL.GS
                         speed -= percent;
                         //log.Debug("speed = " + speed + " percent = " + percent + " eProperty.archeryspeed = " + GetModified(eProperty.ArcherySpeed));
 
-                        if (owner.rangeAttackComponent.RangedAttackType == eRangedAttackType.Critical)
+                        if (owner.rangeAttackComponent.RangedAttackType is eRangedAttackType.Critical)
                             speed = speed * 2 - (player.GetAbilityLevel(Abilities.Critical_Shot) - 1) * speed / 10;
                     }
                     else
@@ -415,7 +399,7 @@ namespace DOL.GS
                 }
                 else
                 {
-                    if (owner.ActiveWeaponSlot == eActiveWeaponSlot.Distance)
+                    if (owner.ActiveWeaponSlot is eActiveWeaponSlot.Distance)
                     {
                         // Old archery uses archery speed, but new archery uses casting speed
                         if (Properties.ALLOW_OLD_ARCHERY)
@@ -481,7 +465,7 @@ namespace DOL.GS
                         }
                     }
 
-                    if (weapon.Object_Type is ((int)eObjectType.Longbow) or ((int)eObjectType.RecurvedBow) or ((int)eObjectType.CompositeBow))
+                    if ((eObjectType) weapon.Object_Type is eObjectType.Longbow or eObjectType.RecurvedBow or eObjectType.CompositeBow)
                     {
                         if (Properties.ALLOW_OLD_ARCHERY)
                             effectiveness += owner.GetModified(eProperty.RangedDamage) * 0.01;
@@ -505,16 +489,16 @@ namespace DOL.GS
                 }
 
                 damageCap *= effectiveness;
-
-                double damage = player.ApplyWeaponQualityAndConditionToDamage(weapon, damageCap);
-
+                double damage = IGamePlayer.ApplyWeaponQualityAndConditionToDamage(weapon, damageCap);
                 damageCap *= 3;
-
-                return damage *= effectiveness;
+                return damage;
             }
             else
             {
                 double damage = (1.0 + owner.Level / Properties.PVE_MOB_DAMAGE_F1 + owner.Level * owner.Level / Properties.PVE_MOB_DAMAGE_F2) * NpcWeaponSpeed(weapon) * 0.1;
+
+                if (owner is GameNPC npc)
+                    damage *= npc.DamageFactor;
 
                 if (weapon == null ||
                     weapon.SlotPosition == Slot.RIGHTHAND ||
@@ -523,9 +507,9 @@ namespace DOL.GS
                 {
                     effectiveness += owner.GetModified(eProperty.MeleeDamage) * 0.01;
                 }
-                else if (weapon.SlotPosition == Slot.RANGED)
+                else if (weapon.SlotPosition is Slot.RANGED)
                 {
-                    if (weapon.Object_Type is ((int)eObjectType.Longbow) or ((int)eObjectType.RecurvedBow) or ((int)eObjectType.CompositeBow))
+                    if ((eObjectType) weapon.Object_Type is eObjectType.Longbow or eObjectType.RecurvedBow or eObjectType.CompositeBow)
                     {
                         if (Properties.ALLOW_OLD_ARCHERY)
                             effectiveness += owner.GetModified(eProperty.RangedDamage) * 0.01;
@@ -540,24 +524,19 @@ namespace DOL.GS
                 }
 
                 damage *= effectiveness;
+                damageCap = damage * 3;
 
-                if (owner is GameEpicBoss epicBoss)
-                    damageCap = damage * epicBoss.Empathy / 100.0 * Properties.SET_EPIC_ENCOUNTER_WEAPON_DAMAGE_CAP;
-                else
-                    damageCap = damage * 3;
+                if (owner is GameEpicBoss)
+                    damageCap *= Properties.SET_EPIC_ENCOUNTER_WEAPON_DAMAGE_CAP;
 
                 return damage;
             }
         }
 
-        public void RequestStartAttack(GameObject attackTarget)
+        public void RequestStartAttack(GameObject attackTarget = null)
         {
-            if (!StartAttackRequested)
-            {
-                m_startAttackTarget = attackTarget;
-                StartAttackRequested = true;
-            }
-
+            _startAttackTarget = attackTarget;
+            StartAttackRequested = true;
             EntityManager.Add(this);
         }
 
@@ -565,7 +544,7 @@ namespace DOL.GS
         {
             if (owner is GamePlayer player)
             {
-                if (!player.CharacterClass.StartAttack(m_startAttackTarget))
+                if (!player.CharacterClass.StartAttack(_startAttackTarget))
                     return;
 
                 if (!player.IsAlive)
@@ -577,7 +556,7 @@ namespace DOL.GS
                 // Necromancer with summoned pet cannot attack.
                 if (player.ControlledBrain?.Body is NecromancerPet)
                 {
-                    player.Out.SendMessage( LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.CantInShadeMode"), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
+                    player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.CantInShadeMode"), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
                     return;
                 }
 
@@ -595,19 +574,21 @@ namespace DOL.GS
 
                 long vanishTimeout = player.TempProperties.GetProperty<long>(VanishEffect.VANISH_BLOCK_ATTACK_TIME_KEY);
 
-                if (vanishTimeout > 0 && vanishTimeout > GameLoop.GameLoopTime)
+                if (vanishTimeout > 0)
                 {
-                    player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.YouMustWaitAgain", (vanishTimeout - GameLoop.GameLoopTime + 1000) / 1000), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
-                    return;
-                }
+                    if (vanishTimeout > GameLoop.GameLoopTime)
+                    {
+                        player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.YouMustWaitAgain", (vanishTimeout - GameLoop.GameLoopTime + 1000) / 1000), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
+                        return;
+                    }
 
-                long VanishTick = player.TempProperties.GetProperty<long>(VanishEffect.VANISH_BLOCK_ATTACK_TIME_KEY);
-                long changeTime = GameLoop.GameLoopTime - VanishTick;
+                    long changeTime = GameLoop.GameLoopTime - vanishTimeout;
 
-                if (changeTime < 30000 && VanishTick > 0)
-                {
-                    player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.YouMustWait", ((30000 - changeTime) / 1000).ToString()), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
-                    return;
+                    if (changeTime < 30000)
+                    {
+                        player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.YouMustWait", ((30000 - changeTime) / 1000).ToString()), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
+                        return;
+                    }
                 }
 
                 if (player.IsOnHorse)
@@ -636,15 +617,15 @@ namespace DOL.GS
                     return;
                 }
 
-                if ((eObjectType) attackWeapon.Object_Type == eObjectType.Instrument)
+                if ((eObjectType) attackWeapon.Object_Type is eObjectType.Instrument)
                 {
                     player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.CannotMelee"), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
                     return;
                 }
 
-                if (player.ActiveWeaponSlot == eActiveWeaponSlot.Distance)
+                if (player.ActiveWeaponSlot is eActiveWeaponSlot.Distance)
                 {
-                    if (Properties.ALLOW_OLD_ARCHERY == false)
+                    if (!Properties.ALLOW_OLD_ARCHERY)
                     {
                         if ((eCharacterClass) player.CharacterClass.ID is eCharacterClass.Scout or eCharacterClass.Hunter or eCharacterClass.Ranger)
                         {
@@ -676,7 +657,7 @@ namespace DOL.GS
                     if (EffectListService.GetAbilityEffectOnTarget(player, eEffect.TrueShot) != null)
                         player.rangeAttackComponent.RangedAttackType = eRangedAttackType.Long;
 
-                    if (player.rangeAttackComponent?.RangedAttackType == eRangedAttackType.Critical &&
+                    if (player.rangeAttackComponent?.RangedAttackType is eRangedAttackType.Critical &&
                         player.Endurance < RangeAttackComponent.CRITICAL_SHOT_ENDURANCE_COST)
                     {
                         player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.TiredShot"), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
@@ -696,7 +677,7 @@ namespace DOL.GS
                         int stealthSpec = player.GetModifiedSpecLevel(Specs.Stealth);
                         int stayStealthed = stealthSpec * 100 / player.Level;
 
-                        if (player.rangeAttackComponent?.RangedAttackType == eRangedAttackType.Critical)
+                        if (player.rangeAttackComponent?.RangedAttackType is eRangedAttackType.Critical)
                             stayStealthed -= 20;
 
                         if (!Util.Chance(stayStealthed))
@@ -705,14 +686,14 @@ namespace DOL.GS
                 }
                 else
                 {
-                    if (m_startAttackTarget == null)
+                    if (_startAttackTarget == null)
                         player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.CombatNoTarget"), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
                     else
                     {
-                        if (m_startAttackTarget is GameNPC npcTarget)
-                            player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.CombatTarget", m_startAttackTarget.GetName(0, false, player.Client.Account.Language, npcTarget)), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
+                        if (_startAttackTarget is GameNPC npcTarget)
+                            player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.CombatTarget", _startAttackTarget.GetName(0, false, player.Client.Account.Language, npcTarget)), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
                         else
-                            player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.CombatTarget", m_startAttackTarget.GetName(0, false)), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
+                            player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.CombatTarget", _startAttackTarget.GetName(0, false)), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
 
                         // Unstealth right after entering combat mode if anything is targeted.
                         // A timer is used to allow any potential opener to be executed.
@@ -752,16 +733,16 @@ namespace DOL.GS
                         player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.SpellCancelled"), eChatType.CT_SpellResisted, eChatLoc.CL_SystemWindow);
                     }
 
-                    if (player.ActiveWeaponSlot != eActiveWeaponSlot.Distance)
+                    if (player.ActiveWeaponSlot is not eActiveWeaponSlot.Distance)
                         player.Out.SendAttackMode(AttackState && !oldAttackState);
                     else
                     {
-                        string typeMsg = attackWeapon.Object_Type == (int)eObjectType.Thrown ? "throw" : "shot";
+                        string typeMsg = (eObjectType) attackWeapon.Object_Type is eObjectType.Thrown ? "throw" : "shot";
                         string targetMsg;
 
-                        if (m_startAttackTarget != null)
+                        if (_startAttackTarget != null)
                         {
-                            targetMsg = player.IsWithinRadius(m_startAttackTarget, AttackRange)
+                            targetMsg = player.IsWithinRadius(_startAttackTarget, AttackRange)
                                 ? LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.TargetInRange")
                                 : LanguageMgr.GetTranslation(player.Client.Account.Language, "GamePlayer.StartAttack.TargetOutOfRange");
                         }
@@ -770,7 +751,7 @@ namespace DOL.GS
 
                         int speed = AttackSpeed(attackWeapon) / 100;
 
-                        if (player.rangeAttackComponent.RangedAttackType == eRangedAttackType.RapidFire)
+                        if (player.rangeAttackComponent.RangedAttackType is eRangedAttackType.RapidFire)
                             speed = Math.Max(15, speed / 2);
 
                         if (!player.effectListComponent.ContainsEffectForEffectType(eEffect.Volley))
@@ -792,9 +773,9 @@ namespace DOL.GS
             if (owner.IsEngaging)
                 owner.CancelEngageEffect();
 
-            if (owner.ActiveWeaponSlot == eActiveWeaponSlot.Distance)
+            if (owner.ActiveWeaponSlot is eActiveWeaponSlot.Distance)
             {
-                if (owner.rangeAttackComponent.RangedAttackState != eRangedAttackState.Aim && attackAction.CheckInterruptTimer())
+                if (owner.rangeAttackComponent.RangedAttackState is not eRangedAttackState.Aim && attackAction.CheckInterruptTimer())
                     return false;
 
                 owner.rangeAttackComponent.AttackStartTime = GameLoop.GameLoopTime;
@@ -807,23 +788,27 @@ namespace DOL.GS
         private void NpcStartAttack()
         {
             GameNPC npc = owner as GameNPC;
-
-            npc.FireAmbientSentence(GameNPC.eAmbientTrigger.fighting, m_startAttackTarget);
-            npc.TargetObject = m_startAttackTarget;
+            npc.FireAmbientSentence(GameNPC.eAmbientTrigger.fighting, _startAttackTarget);
 
             if (npc.Brain is IControlledBrain brain)
             {
-                if (brain.AggressionState == eAggressionState.Passive)
+                if (brain.AggressionState is eAggressionState.Passive)
                     return;
             }
 
             // NPCs aren't allowed to prepare their ranged attack while moving or out of range.
-            if (npc.ActiveWeaponSlot == eActiveWeaponSlot.Distance)
+            // If we have a running `AttackAction`, let it decide what to do. Not every NPC should start following their target and this allows us to react faster.
+            if (npc.ActiveWeaponSlot is eActiveWeaponSlot.Distance)
             {
-                if (!npc.IsWithinRadius(npc.TargetObject, AttackRange - 30))
+                if (!npc.IsWithinRadius(_startAttackTarget, AttackRange - 30))
                 {
-                    StopAttack();
-                    npc.Follow(m_startAttackTarget, npc.StickMinimumRange, npc.StickMaximumRange);
+                    if (attackAction == null || !attackAction.OnOutOfRangeOrNoLosRangedAttack())
+                    {
+                        // Default behavior. If `AttackAction` doesn't handle it, tell the NPC to get closer to its target.
+                        StopAttack();
+                        npc.Follow(_startAttackTarget, npc.StickMinimumRange, npc.StickMaximumRange);
+                    }
+
                     return;
                 }
 
@@ -833,24 +818,28 @@ namespace DOL.GS
 
             if (LivingStartAttack())
             {
-                if (m_startAttackTarget != npc.FollowTarget)
+                npc.TargetObject = _startAttackTarget;
+
+                if (_startAttackTarget != npc.FollowTarget)
                 {
                     if (npc.IsMoving)
                         npc.StopMoving();
 
-                    if (npc.ActiveWeaponSlot == eActiveWeaponSlot.Distance)
-                        npc.TurnTo(m_startAttackTarget);
+                    if (npc.ActiveWeaponSlot is eActiveWeaponSlot.Distance)
+                        npc.TurnTo(_startAttackTarget);
 
-                    npc.Follow(m_startAttackTarget, npc.StickMinimumRange, npc.StickMaximumRange);
+                    npc.Follow(_startAttackTarget, npc.StickMinimumRange, npc.StickMaximumRange);
                 }
             }
-            else if (npc.ActiveWeaponSlot == eActiveWeaponSlot.Distance)
-                npc.TurnTo(m_startAttackTarget);
+            else if (npc.ActiveWeaponSlot is eActiveWeaponSlot.Distance)
+                npc.TurnTo(_startAttackTarget);
         }
 
         public void StopAttack()
         {
-            if (owner.ActiveWeaponSlot == eActiveWeaponSlot.Distance)
+            StartAttackRequested = false;
+
+            if (owner.ActiveWeaponSlot is eActiveWeaponSlot.Distance)
             {
                 // Only cancel the animation if the ranged ammo isn't released already.
                 if (AttackState && weaponAction?.AttackFinished != true)
@@ -893,7 +882,7 @@ namespace DOL.GS
         /// <summary>
         /// Called whenever a single attack strike is made
         /// </summary>
-        public AttackData MakeAttack(WeaponAction action, GameObject target, DbInventoryItem weapon, Style style, double effectiveness, int interruptDuration, bool dualWield)
+        public AttackData MakeAttack(WeaponAction action, GameObject target, DbInventoryItem weapon, Style style, double effectiveness, int interval, bool dualWield)
         {
             if (owner is IGamePlayer playerOwner)
             {
@@ -916,7 +905,7 @@ namespace DOL.GS
                     }
                 }
 
-                AttackData ad = LivingMakeAttack(action, target, weapon, style, effectiveness * playerOwner.Effectiveness, interruptDuration, dualWield);
+                AttackData ad = LivingMakeAttack(action, target, weapon, style, effectiveness * playerOwner.Effectiveness, interval, dualWield);
 
                 switch (ad.AttackResult)
                 {
@@ -974,7 +963,7 @@ namespace DOL.GS
                         }
 
                         // Multiple Hit check.
-                        if (ad.AttackResult == eAttackResult.HitStyle)
+                        if (ad.AttackResult is eAttackResult.HitStyle)
                         {
                             List<GameObject> extraTargets = new();
                             List<GameObject> listAvailableTargets = new();
@@ -1059,7 +1048,7 @@ namespace DOL.GS
                 else
                     effectiveness = 1;
 
-                return LivingMakeAttack(action, target, weapon, style, effectiveness, interruptDuration, dualWield);
+                return LivingMakeAttack(action, target, weapon, style, effectiveness, interval, dualWield);
             }
         }
 
@@ -1068,22 +1057,22 @@ namespace DOL.GS
         /// attacktimer and should not be called manually
         /// </summary>
         /// <returns>the object where we collect and modifiy all parameters about the attack</returns>
-        public AttackData LivingMakeAttack(WeaponAction action, GameObject target, DbInventoryItem weapon, Style style, double effectiveness, int interruptDuration, bool dualWield, bool ignoreLOS = false)
+        public AttackData LivingMakeAttack(WeaponAction action, GameObject target, DbInventoryItem weapon, Style style, double effectiveness, int interval, bool dualWield, bool ignoreLOS = false)
         {
             AttackData ad = new()
             {
                 Attacker = owner,
                 Target = target as GameLiving,
                 Style = style,
-                WeaponSpeed = AttackSpeed(weapon),
                 DamageType = AttackDamageType(weapon),
                 Weapon = weapon,
+                Interval = interval,
                 IsOffHand = weapon != null && weapon.SlotPosition == Slot.LEFTHAND
             };
 
             // Asp style range add.
-            IEnumerable<(Spell, int, int)> rangeProc = style?.Procs.Where(x => x.Item1.SpellType == eSpellType.StyleRange);
-            int addRange = rangeProc?.Any() == true ? (int)(rangeProc.First().Item1.Value - AttackRange) : 0;
+            IEnumerable<(Spell, int, int)> rangeProc = style?.Procs.Where(x => x.Item1.SpellType is eSpellType.StyleRange);
+            int addRange = rangeProc?.Any() == true ? (int) (rangeProc.First().Item1.Value - AttackRange) : 0;
 
             if (dualWield && (ad.Attacker is IGamePlayer gPlayer) && gPlayer.CharacterClass.ID != (int)eCharacterClass.Savage)
                 ad.AttackType = AttackData.eAttackType.MeleeDualWield;
@@ -1219,14 +1208,14 @@ namespace DOL.GS
                         eObjectType objectType = (eObjectType) weapon.Object_Type;
                         int slotPosition = weapon.SlotPosition;
 
-                        if (owner is IGamePlayer && owner.Realm == eRealm.Albion && Properties.ENABLE_ALBION_ADVANCED_WEAPON_SPEC &&
+                        if (owner is IGamePlayer && owner.Realm is eRealm.Albion && Properties.ENABLE_ALBION_ADVANCED_WEAPON_SPEC &&
                             (GameServer.ServerRules.IsObjectTypesEqual((eObjectType)weapon.Object_Type, eObjectType.TwoHandedWeapon) ||
                             GameServer.ServerRules.IsObjectTypesEqual((eObjectType)weapon.Object_Type, eObjectType.PolearmWeapon)))
                         {
                             // Albion dual spec penalty, which sets minimum damage to the base damage spec.
-                            if ((eDamageType) weapon.Type_Damage == eDamageType.Crush)
+                            if ((eDamageType) weapon.Type_Damage is eDamageType.Crush)
                                 objectType = eObjectType.CrushingWeapon;
-                            else if ((eDamageType) weapon.Type_Damage == eDamageType.Slash)
+                            else if ((eDamageType) weapon.Type_Damage is eDamageType.Slash)
                                 objectType = eObjectType.SlashingWeapon;
                             else
                                 objectType = eObjectType.ThrustWeapon;
@@ -1240,28 +1229,14 @@ namespace DOL.GS
                     double armorMod = CalculateTargetArmor(ad.Target, ad.ArmorHitLocation, out double armorFactor, out double absorb);
                     double damageMod = weaponSkill / armorMod;
 
-                    if (action.RangedAttackType == eRangedAttackType.Critical)
+                    if (action.RangedAttackType is eRangedAttackType.Critical)
                         baseDamageCap *= 2; // This may be incorrect. Critical shot doesn't double damage on >yellow targets.
 
-                    if (playerOwner is GamePlayer gamePlayer)
-                    {
-                        // Badge Of Valor Calculation 1+ absorb or 1- absorb
-                        // if (ad.Attacker.EffectList.GetOfType<BadgeOfValorEffect>() != null)
-                        //     damage *= 1.0 + Math.Min(0.85, ad.Target.GetArmorAbsorb(ad.ArmorHitLocation));
-                        // else
-                        //     damage *= 1.0 - Math.Min(0.85, ad.Target.GetArmorAbsorb(ad.ArmorHitLocation));
-                    }
-                    else
-                    {
-                        if (owner is GameEpicBoss boss)
-                            damageMod += boss.Strength / 200;
-
-                        // Badge Of Valor Calculation 1+ absorb or 1- absorb
-                        // if (ad.Attacker.EffectList.GetOfType<BadgeOfValorEffect>() != null)
-                        //     damage *= 1.0 + Math.Min(0.85, ad.Target.GetArmorAbsorb(ad.ArmorHitLocation));
-                        // else
-                        //     damage *= 1.0 - Math.Min(0.85, ad.Target.GetArmorAbsorb(ad.ArmorHitLocation));
-                    }
+                    // Badge Of Valor Calculation 1+ absorb or 1- absorb
+                    // if (ad.Attacker.EffectList.GetOfType<BadgeOfValorEffect>() != null)
+                    //     damage *= 1.0 + Math.Min(0.85, ad.Target.GetArmorAbsorb(ad.ArmorHitLocation));
+                    // else
+                    //     damage *= 1.0 - Math.Min(0.85, ad.Target.GetArmorAbsorb(ad.ArmorHitLocation));
 
                     if (ad.IsOffHand)
                         damage *= 1 + owner.GetModified(eProperty.OffhandDamage) * 0.01;
@@ -1334,12 +1309,12 @@ namespace DOL.GS
                 static void PrintDetailedCombatLog(GamePlayer player, double armorFactor, double absorb, double armorMod, double baseWeaponSkill, double specModifier, double weaponSkill, double damageMod, double baseDamageCap, double styleDamageCap)
                 {
                     StringBuilder stringBuilder = new();
-                    stringBuilder.Append($"BaseWS: {baseWeaponSkill:0.00} | SpecMod: {specModifier:0.00} | WS: {weaponSkill:0.00}\n");
-                    stringBuilder.Append($"AF: {armorFactor:0.00} | ABS: {absorb * 100:0.00}% | AF/ABS: {armorMod:0.00}\n");
-                    stringBuilder.Append($"DamageMod: {damageMod:0.00} | BaseDamageCap: {baseDamageCap:0.00}");
+                    stringBuilder.Append($"BaseWS: {baseWeaponSkill:0.##} | SpecMod: {specModifier:0.##} | WS: {weaponSkill:0.##}\n");
+                    stringBuilder.Append($"AF: {armorFactor:0.##} | ABS: {absorb * 100:0.##}% | AF/ABS: {armorMod:0.##}\n");
+                    stringBuilder.Append($"DamageMod: {damageMod:0.##} | BaseDamageCap: {baseDamageCap:0.##}");
 
                     if (styleDamageCap > 0)
-                        stringBuilder.Append($" | StyleDamageCap: {styleDamageCap:0.00}");
+                        stringBuilder.Append($" | StyleDamageCap: {styleDamageCap:0.##}");
 
                     player.Out.SendMessage(stringBuilder.ToString(), eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
                 }
@@ -1360,66 +1335,46 @@ namespace DOL.GS
             switch (ad.AttackResult)
             {
                 case eAttackResult.Parried:
-                message = string.Format("{0} attacks {1} and is parried!", ad.Attacker.GetName(0, true), ad.Target.GetName(0, false));
-                break;
-
+                    message = $"{ad.Attacker.GetName(0, true)} attacks {ad.Target.GetName(0, false)} and is parried!";
+                    break;
                 case eAttackResult.Evaded:
-                message = string.Format("{0} attacks {1} and is evaded!", ad.Attacker.GetName(0, true), ad.Target.GetName(0, false));
-                break;
-
+                    message = $"{ad.Attacker.GetName(0, true)} attacks {ad.Target.GetName(0, false)} and is evaded!";
+                    break;
                 case eAttackResult.Fumbled:
-                message = string.Format("{0} fumbled!", ad.Attacker.GetName(0, true), ad.Target.GetName(0, false));
-                break;
-
+                    message = $"{ad.Attacker.GetName(0, true)} fumbled!";
+                    break;
                 case eAttackResult.Missed:
-                message = string.Format("{0} attacks {1} and misses!", ad.Attacker.GetName(0, true), ad.Target.GetName(0, false));
-                break;
-
+                    message = $"{ad.Attacker.GetName(0, true)} attacks {ad.Target.GetName(0, false)} and misses!";
+                    break;
                 case eAttackResult.Blocked:
                 {
-                    message = string.Format("{0} attacks {1} and is blocked!", ad.Attacker.GetName(0, true),
-                        ad.Target.GetName(0, false));
-                    // guard messages
+                    message = $"{ad.Attacker.GetName(0, true)} attacks {ad.Target.GetName(0, false)} and is blocked!";
+
+                    // Guard.
                     if (target != null && target != ad.Target)
                     {
                         excludes.Add(target);
 
-                        // another player blocked for real target
-                        if (target is GamePlayer)
-                            ((GamePlayer)target).Out.SendMessage(
-                                string.Format(
-                                    LanguageMgr.GetTranslation(((GamePlayer)target).Client.Account.Language,
-                                        "GameLiving.AttackData.BlocksYou"), ad.Target.GetName(0, true),
-                                    ad.Attacker.GetName(0, false)), eChatType.CT_Missed, eChatLoc.CL_SystemWindow);
+                        // Another player blocked for real target.
+                        if (target is GamePlayer playerTarget)
+                            playerTarget.Out.SendMessage(string.Format(LanguageMgr.GetTranslation(playerTarget.Client.Account.Language, "GameLiving.AttackData.BlocksYou") + $" ({ad.BlockChance:0.0}%)", ad.Target.GetName(0, true), ad.Attacker.GetName(0, false)), eChatType.CT_Missed, eChatLoc.CL_SystemWindow);
 
-                        // blocked for another player
-                        if (ad.Target is GamePlayer)
+                        // Blocked for another player.
+                        if (ad.Target is IGamePlayer playerTarget2)
                         {
-                            ((GamePlayer)ad.Target).Out.SendMessage(
-                                string.Format(
-                                    LanguageMgr.GetTranslation(((GamePlayer)ad.Target).Client.Account.Language,
-                                        "GameLiving.AttackData.YouBlock") +
-                                        $" ({ad.BlockChance:0.0}%)", ad.Attacker.GetName(0, false),
-                                    target.GetName(0, false)), eChatType.CT_Missed, eChatLoc.CL_SystemWindow);
-                            ((GamePlayer)ad.Target).Stealth(false);
+                            playerTarget2.Out.SendMessage(string.Format(LanguageMgr.GetTranslation(playerTarget2.Client.Account.Language, "GameLiving.AttackData.YouBlock") + $" ({ad.BlockChance:0.0}%)", ad.Attacker.GetName(0, false), target.GetName(0, false)), eChatType.CT_Missed, eChatLoc.CL_SystemWindow);
+                            playerTarget2.Stealth(false);
                         }
                     }
-                    else if (ad.Target is GamePlayer)
-                    {
-                        ((GamePlayer)ad.Target).Out.SendMessage(
-                            string.Format(
-                                LanguageMgr.GetTranslation(((GamePlayer)ad.Target).Client.Account.Language,
-                                    "GameLiving.AttackData.AttacksYou") +
-                                    $" ({ad.BlockChance:0.0}%)", ad.Attacker.GetName(0, true)),
-                            eChatType.CT_Missed, eChatLoc.CL_SystemWindow);
-                    }
+                    else if (ad.Target is GamePlayer playerTarget)
+                        playerTarget.Out.SendMessage(string.Format(LanguageMgr.GetTranslation(playerTarget.Client.Account.Language, "GameLiving.Attack.Block") + $" ({ad.BlockChance:0.0}%)", ad.Attacker.GetName(0, true)), eChatType.CT_Missed, eChatLoc.CL_SystemWindow);
 
                     break;
                 }
                 case eAttackResult.HitUnstyled:
                 case eAttackResult.HitStyle:
                 {
-                    if (ad.AttackResult == eAttackResult.HitStyle)
+                    if (ad.AttackResult is eAttackResult.HitStyle)
                     {
                         if (playerOwner != null)
                         {
@@ -1549,7 +1504,7 @@ namespace DOL.GS
 
                                 string attackTypeMsg;
 
-                                if (action.ActiveWeaponSlot == eActiveWeaponSlot.Distance)
+                                if (action.ActiveWeaponSlot is eActiveWeaponSlot.Distance)
                                     attackTypeMsg = "shoots";
                                 else
                                     attackTypeMsg = "attacks";
@@ -1569,7 +1524,7 @@ namespace DOL.GS
                             }
                             case eAttackResult.Missed:
                             {
-                                owner.Out.SendMessage(message + $" ({ad.MissChance}%)", eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
+                                owner.Out.SendMessage(message + $" ({ad.MissChance:0.##}%)", eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
                                 break;
                             }
                             default:
@@ -1680,7 +1635,7 @@ namespace DOL.GS
             }
 
             // Interrupt the target of the attack
-            ad.Target.StartInterruptTimer(interruptDuration, ad.AttackType, ad.Attacker);
+            ad.Target.StartInterruptTimer(interval, ad.AttackType, ad.Attacker);
 
             // If we're attacking via melee, start an interrupt timer on ourselves so we cannot swing + immediately cast.
             if (ad.IsMeleeAttack)
@@ -1706,6 +1661,13 @@ namespace DOL.GS
             return weaponSkill;
         }
 
+        public double CalculateDefensePenetration(AttackData ad)
+        {
+            int levelDifference = (owner is IGamePlayer ? owner.WeaponSpecLevel(ad.Weapon) : owner.Level) - ad.Target.Level;
+            double specModifier = 1 + levelDifference * 0.01;
+            return CalculateWeaponSkill(ad.Weapon, specModifier, out _) * 0.08 / 100;
+        }
+
         public double CalculateSpecModifier(GameLiving target, int spec)
         {
             double lowerLimit;
@@ -1728,7 +1690,7 @@ namespace DOL.GS
                 // Also prevents negative values.
                 spec = Math.Max(owner.Level < 5 ? 2 : 1, spec);
                 lowerLimit = Math.Min(0.75 * (spec - 1) / (target.Level + 1) + 0.25, 1.0);
-                upperLimit = Math.Min(Math.Max(1.25 + (3.0 * (spec - 1) / (target.Level + 1) - 2) * 0.25, 1.25), 1.50);
+                upperLimit = Math.Min(Math.Max(1.25 + (3.0 * (spec - 1) / (target.Level + 1) - 2) * 0.25, 1.25), 1.5);
             }
             else
             {
@@ -1739,7 +1701,6 @@ namespace DOL.GS
             double varianceRange = upperLimit - lowerLimit;
             return lowerLimit + Util.RandomDoubleIncl() * varianceRange;
         }
-
 
         public static double CalculateTargetArmor(GameLiving target, eArmorSlot armorSlot, out double armorFactor, out double absorb)
         {
@@ -1795,26 +1756,29 @@ namespace DOL.GS
             target.Endurance = Math.Min(target.MaxEndurance, target.Endurance + enduranceConversion);
         }
 
-        public virtual bool CheckBlock(AttackData ad, int attackerConLevel)
+        public virtual bool CheckBlock(AttackData ad)
         {
-            double blockChance = owner.TryBlock(ad, attackerConLevel, Attackers.Count);
+            double blockChance = owner.TryBlock(ad, out int shieldSize);
             ad.BlockChance = blockChance * 100;
             double blockRoll;
 
-            if (!Properties.OVERRIDE_DECK_RNG && owner is IGamePlayer player)
-                blockRoll = player.RandomNumberDeck.GetPseudoDouble();
-            else
-                blockRoll = Util.CryptoNextDouble();
-
             if (blockChance > 0)
             {
-                if (ad.Attacker is GamePlayer blockAttk && blockAttk.UseDetailedCombatLog)
-                    blockAttk.Out.SendMessage($"target block%: {blockChance * 100:0.##} rand: {blockRoll * 100:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
+                if (!Properties.OVERRIDE_DECK_RNG && owner is IGamePlayer player)
+                    blockRoll = player.RandomNumberDeck.GetPseudoDouble();
+                else
+                    blockRoll = Util.CryptoNextDouble();
 
-                if (ad.Target is GamePlayer blockTarg && blockTarg.UseDetailedCombatLog)
-                    blockTarg.Out.SendMessage($"your block%: {blockChance * 100:0.##} rand: {blockRoll * 100:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
+                if (ad.Attacker is GamePlayer attacker && attacker.UseDetailedCombatLog)
+                    attacker.Out.SendMessage($"target block%: {blockChance * 100:0.##} rand: {blockRoll * 100:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
 
-                if (blockChance > blockRoll)
+                if (ad.Target is GamePlayer defender && defender.UseDetailedCombatLog)
+                    defender.Out.SendMessage($"your block%: {blockChance * 100:0.##} rand: {blockRoll * 100:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
+
+                // The order here matters a lot. Either we consume attempts (by calling `Consume` first`) or blocks (by checking the roll first; the current implementation).
+                // If we consume attempts, the effective block rate changes according to this formula: "if (shieldSize < attackerCount) blockChance *= (shieldSize / attackerCount)".
+                // If we consume blocks, then the reduction is lower the lower the base block chance, and identical with a theoretical 100% block chance.
+                if (blockChance > blockRoll && _blockRoundHandler.Consume(shieldSize, ad))
                     return true;
             }
 
@@ -1831,100 +1795,91 @@ namespace DOL.GS
             return false;
         }
 
-        public bool CheckGuard(AttackData ad, bool stealthStyle, int attackerConLevel)
+        public bool CheckGuard(AttackData ad, bool stealthStyle)
         {
-            GuardECSGameEffect guard = EffectListService.GetAbilityEffectOnTarget(owner, eEffect.Guard) as GuardECSGameEffect;
+            foreach (GuardECSGameEffect guard in owner.effectListComponent.GetAbilityEffects().Where(e => e.EffectType is eEffect.Guard))
+            {
+                if (guard.Target != owner)
+                    continue;
 
-            if (guard?.Target != owner)
-                return false;
+                GameLiving source = guard.Source;
 
-            GameLiving source = guard.Source;
+                if (source == null ||
+                    source.IsIncapacitated ||
+                    source.ActiveWeaponSlot is eActiveWeaponSlot.Distance ||
+                    source.IsSitting ||
+                    stealthStyle ||
+                    !guard.Source.IsObjectInFront(ad.Attacker, 180) ||
+                    !guard.Source.IsWithinRadius(guard.Target, GuardAbilityHandler.GUARD_DISTANCE))
+                    continue;
 
-            if (source == null ||
-                source.IsIncapacitated ||
-                source.ActiveWeaponSlot == eActiveWeaponSlot.Distance ||
-                source.IsSitting ||
-                stealthStyle ||
-                !guard.Source.IsWithinRadius(guard.Target, GuardAbilityHandler.GUARD_DISTANCE))
-                return false;
+                DbInventoryItem leftHand = source.Inventory.GetItem(eInventorySlot.LeftHandWeapon);
+                DbInventoryItem rightHand = source.ActiveWeapon;
 
-            DbInventoryItem leftHand = source.Inventory.GetItem(eInventorySlot.LeftHandWeapon);
-            DbInventoryItem rightHand = source.ActiveWeapon;
+                if (((rightHand != null && rightHand.Hand == 1) || leftHand == null || (eObjectType) leftHand.Object_Type is not eObjectType.Shield) && (source is not GameNPC || source is MimicNPC))
+                    continue;
 
-            if (((rightHand != null && rightHand.Hand == 1) || leftHand == null || leftHand.Object_Type != (int)eObjectType.Shield) && source is not GameNPC)
-                return false;
-
-            // TODO: Insert actual formula for guarding here, this is just a guessed one based on block.
-            int guardLevel = source.GetAbilityLevel(Abilities.Guard);
-            double guardChance;
+                double guardChance;
 
             if (source is GameNPC && source is not MimicNPC)
                 guardChance = source.GetModified(eProperty.BlockChance);
             else
                 guardChance = source.GetModified(eProperty.BlockChance) * (leftHand.Quality * 0.01) * (leftHand.Condition / (double)leftHand.MaxCondition);
 
-            guardChance *= 0.001;
-            guardChance += guardLevel * 5 * 0.01; // 5% additional chance to guard with each Guard level.
-            guardChance += attackerConLevel * 0.05;
-            int shieldSize = 1;
+                guardChance *= 0.001;
+                guardChance += source.GetAbilityLevel(Abilities.Guard) * 0.05; // 5% additional chance to guard with each Guard level.
+                guardChance *= 1 - ad.DefensePenetration;
 
-            if (leftHand != null)
-            {
-                shieldSize = Math.Max(leftHand.Type_Damage, 1);
+                if (guardChance > Properties.BLOCK_CAP && ad.Attacker is IGamePlayer && ad.Target is IGamePlayer)
+                    guardChance = Properties.BLOCK_CAP;
 
-                if (source is IGamePlayer)
-                    guardChance += (double)(leftHand.Level - 1) / 50 * 0.15; // Up to 15% extra block chance based on shield level.
-            }
+                int shieldSize = 1; // Guard isn't affected by shield size or attacker count.
 
-            if (Attackers.Count > shieldSize)
-                guardChance *= shieldSize / (double)Attackers.Count;
+                if (leftHand != null)
+                    shieldSize = Math.Max(leftHand.Type_Damage, 1);
 
-            // Reduce chance by attacker's defense penetration.
-            guardChance *= 1 - ad.Attacker.GetAttackerDefensePenetration(ad.Attacker, ad.Weapon) / 100;
+                // Possibly intended to be applied in RvR only.
+                if (shieldSize == 1 && guardChance > 0.8)
+                    guardChance = 0.8;
+                else if (shieldSize == 2 && guardChance > 0.9)
+                    guardChance = 0.9;
+                else if (shieldSize == 3 && guardChance > 0.99)
+                    guardChance = 0.99;
 
-            if (guardChance < 0.01)
-                guardChance = 0.01;
-            else if (guardChance > Properties.BLOCK_CAP && ad.Attacker is IGamePlayer && ad.Target is IGamePlayer)
-                guardChance = Properties.BLOCK_CAP;
+                if (ad.AttackType is AttackData.eAttackType.MeleeDualWield)
+                    guardChance *= 0.5;
 
-            // Possibly intended to be applied in RvR only.
-            if (shieldSize == 1 && guardChance > 0.8)
-                guardChance = 0.8;
-            else if (shieldSize == 2 && guardChance > 0.9)
-                guardChance = 0.9;
-            else if (shieldSize == 3 && guardChance > 0.99)
-                guardChance = 0.99;
-
-            if (ad.AttackType == AttackData.eAttackType.MeleeDualWield)
-                guardChance *= 0.5;
-
-            double guardRoll;
+                if (guardChance > 0)
+                {
+                    double guardRoll;
 
             if (!Properties.OVERRIDE_DECK_RNG && owner is IGamePlayer player)
                 guardRoll = player.RandomNumberDeck.GetPseudoDouble();
             else
                 guardRoll = Util.CryptoNextDouble();
 
-            bool success = guardChance > guardRoll;
+                    if (source is GamePlayer blockAttk && blockAttk.UseDetailedCombatLog)
+                        blockAttk.Out.SendMessage($"chance to guard: {guardChance * 100:0.##} rand: {guardRoll * 100:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
 
-            if (source is GamePlayer blockAttk && blockAttk.UseDetailedCombatLog)
-                blockAttk.Out.SendMessage($"Chance to guard: {guardChance * 100:0.##} rand: {guardRoll * 100:0.##} success? {success}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
+                    if (guard.Target is GamePlayer blockTarg && blockTarg.UseDetailedCombatLog)
+                        blockTarg.Out.SendMessage($"chance to be guarded: {guardChance * 100:0.##} rand: {guardRoll * 100:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
 
-            if (guard.Target is GamePlayer blockTarg && blockTarg.UseDetailedCombatLog)
-                blockTarg.Out.SendMessage($"Chance to be guarded: {guardChance * 100:0.##} rand: {guardRoll * 100:0.##} success? {success}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
-
-            if (success)
-            {
-                ad.Target = source;
-                return true;
+                    if (guardChance > guardRoll)
+                    {
+                        ad.Target = source;
+                        ad.BlockChance = guardChance * 100;
+                        return true;
+                    }
+                }
             }
 
             return false;
         }
 
-        public bool CheckDashingDefense(AttackData ad, bool stealthStyle, int attackerConLevel, out eAttackResult result)
+        public bool CheckDashingDefense(AttackData ad, bool stealthStyle, out eAttackResult result)
         {
             // Not implemented.
+            // Very outdated and needs to be rewritten.
             result = eAttackResult.Any;
             return false;
             DashingDefenseEffect dashing = null;
@@ -1933,7 +1888,7 @@ namespace DOL.GS
                 dashing.GuardSource.ObjectState != eObjectState.Active ||
                 dashing.GuardSource.IsStunned != false ||
                 dashing.GuardSource.IsMezzed != false ||
-                dashing.GuardSource.ActiveWeaponSlot == eActiveWeaponSlot.Distance ||
+                dashing.GuardSource.ActiveWeaponSlot is eActiveWeaponSlot.Distance ||
                 !dashing.GuardSource.IsAlive ||
                 stealthStyle)
                 return false;
@@ -1949,12 +1904,9 @@ namespace DOL.GS
                 int guardLevel = dashing.GuardSource.GetAbilityLevel(Abilities.Guard);
                 double guardchance = dashing.GuardSource.GetModified(eProperty.BlockChance) * leftHand.Quality * 0.00001;
                 guardchance *= guardLevel * 0.25 + 0.05;
-                guardchance += attackerConLevel * 0.05;
 
                 if (guardchance > 0.99)
                     guardchance = 0.99;
-                else if (guardchance < 0.01)
-                    guardchance = 0.01;
 
                 int shieldSize = 0;
 
@@ -1972,12 +1924,9 @@ namespace DOL.GS
                 if (parrychance != double.MinValue)
                 {
                     parrychance *= 0.001;
-                    parrychance += 0.05 * attackerConLevel;
 
                     if (parrychance > 0.99)
                         parrychance = 0.99;
-                    else if (parrychance < 0.01)
-                        parrychance = 0.01;
 
                     if (Attackers.Count > 1)
                         parrychance /= Attackers.Count / 2;
@@ -2003,12 +1952,9 @@ namespace DOL.GS
                 if (parrychance != double.MinValue)
                 {
                     parrychance *= 0.001;
-                    parrychance += 0.05 * attackerConLevel;
 
                     if (parrychance > 0.99)
                         parrychance = 0.99;
-                    else if (parrychance < 0.01)
-                        parrychance = 0.01;
 
                     if (Attackers.Count > 1)
                         parrychance /= Attackers.Count / 2;
@@ -2041,7 +1987,6 @@ namespace DOL.GS
             //http://daoc.catacombs.com/forum.cfm?ThreadKey=511&DefMessage=681444&forum=DAOCMainForum#Defense
 
             InterceptECSGameEffect intercept = null;
-            ECSGameSpellEffect bladeturn = null;
             // ML effects
             GameSpellEffect phaseshift = null;
             GameSpellEffect grapple = null;
@@ -2053,22 +1998,11 @@ namespace DOL.GS
             IGamePlayer playerOwner = owner as IGamePlayer;
             IGamePlayer playerAttacker = ad.Attacker as IGamePlayer;
 
-            // If berserk is on, no defensive skills may be used: evade, parry, ...
-            // unfortunately this as to be check for every action itself to kepp oder of actions the same.
-            // Intercept and guard can still be used on berserked
-            // BerserkEffect berserk = null;
-
             if (EffectListService.GetAbilityEffectOnTarget(owner, eEffect.Berserk) != null)
                 defenseDisabled = true;
 
-            if (EffectListService.GetSpellEffectOnTarget(owner, eEffect.Bladeturn) is ECSGameSpellEffect bladeturnEffect)
-            {
-                if (bladeturn == null)
-                    bladeturn = bladeturnEffect;
-            }
-
             // We check if interceptor can intercept.
-            if (EffectListService.GetAbilityEffectOnTarget(owner, eEffect.Intercept) is InterceptECSGameEffect inter)
+            foreach (InterceptECSGameEffect inter in owner.effectListComponent.GetAbilityEffects().Where(e => e is InterceptECSGameEffect))
             {
                 if (inter.Target == owner && !inter.Source.IsIncapacitated && !inter.Source.IsSitting && owner.IsWithinRadius(inter.Source, InterceptAbilityHandler.INTERCEPT_DISTANCE))
                 {
@@ -2082,7 +2016,10 @@ namespace DOL.GS
                     interceptRoll *= 100;
 
                     if (inter.InterceptChance > interceptRoll)
+                    {
                         intercept = inter;
+                        break;
+                    }
                 }
             }
 
@@ -2136,22 +2073,23 @@ namespace DOL.GS
 
             if (intercept != null && !stealthStyle)
             {
-                ad.Target = intercept.Source;
+                if (intercept.Source is not IGamePlayer || EffectService.RequestImmediateCancelEffect(intercept))
+                {
+                    ad.Target = intercept.Source;
+                    return eAttackResult.HitUnstyled;
+                }
 
-                if (intercept.Source is IGamePlayer)
-                    EffectService.RequestCancelEffect(intercept);
-
-                return eAttackResult.HitUnstyled;
+                intercept = null;
             }
 
-            int attackerConLevel = -owner.GetConLevel(ad.Attacker);
+            ad.DefensePenetration = ad.Attacker.attackComponent.CalculateDefensePenetration(ad);
 
             if (!defenseDisabled)
             {
-                if (lastAttackData != null && lastAttackData.AttackResult != eAttackResult.HitStyle)
+                if (lastAttackData != null && lastAttackData.AttackResult is not eAttackResult.HitStyle)
                     lastAttackData = null;
 
-                double evadeChance = owner.TryEvade(ad, lastAttackData, attackerConLevel, Attackers.Count);
+                double evadeChance = owner.TryEvade(ad, lastAttackData, Attackers.Count);
                 ad.EvadeChance = evadeChance * 100;
                 double evadeRoll;
 
@@ -2174,7 +2112,7 @@ namespace DOL.GS
 
                 if (ad.IsMeleeAttack)
                 {
-                    double parryChance = owner.TryParry(ad, lastAttackData, attackerConLevel, Attackers.Count);
+                    double parryChance = owner.TryParry(ad, lastAttackData, Attackers.Count);
                     ad.ParryChance = parryChance * 100;
                     double parryRoll;
 
@@ -2196,19 +2134,19 @@ namespace DOL.GS
                     }
                 }
 
-                if (CheckBlock(ad, attackerConLevel))
+                if (CheckBlock(ad))
                     return eAttackResult.Blocked;
             }
 
-            if (CheckGuard(ad, stealthStyle, attackerConLevel))
+            if (CheckGuard(ad, stealthStyle))
                 return eAttackResult.Blocked;
 
             // Not implemented.
-            // if (CheckDashingDefense(ad, stealthStyle, attackerConLevel, out eAttackResult result)
+            // if (CheckDashingDefense(ad, stealthStyle, out eAttackResult result)
             //     return result;
 
             // Miss chance.
-            int missChance = GetMissChance(action, ad, lastAttackData, attackerWeapon);
+            double missChance = GetMissChance(action, ad, lastAttackData, attackerWeapon);
 
             // Check for dirty trick fumbles before misses.
             DirtyTricksDetrimentalECSGameEffect dt = (DirtyTricksDetrimentalECSGameEffect)EffectListService.GetAbilityEffectOnTarget(ad.Attacker, eEffect.DirtyTricksDetrimental);
@@ -2229,14 +2167,14 @@ namespace DOL.GS
 
                 if (ad.Attacker is GamePlayer misser && misser.UseDetailedCombatLog)
                 {
-                    misser.Out.SendMessage($"miss rate on target: {missChance}% rand: {missRoll * 100:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
+                    misser.Out.SendMessage($"miss rate on target: {missChance:0.##}% rand: {missRoll * 100:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
 
                     if (ad.AttackType != AttackData.eAttackType.Ranged)
                         misser.Out.SendMessage($"Your chance to fumble: {100 * ad.Attacker.ChanceToFumble:0.##}% rand: {100 * missRoll:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
                 }
 
                 if (ad.Target is GamePlayer missee && missee.UseDetailedCombatLog)
-                    missee.Out.SendMessage($"chance to be missed: {missChance}% rand: {missRoll * 100:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
+                    missee.Out.SendMessage($"chance to be missed: {missChance:0.##}% rand: {missRoll * 100:0.##}", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
 
                 if (missChance > missRoll * 100)
                 {
@@ -2261,6 +2199,8 @@ namespace DOL.GS
              * It was a bug that caused it to work 100% of the time - now it takes the
              * levels of the players involved into account.
              */
+            BladeturnECSGameEffect bladeturn = EffectListService.GetSpellEffectOnTarget(owner, eEffect.Bladeturn) as BladeturnECSGameEffect;
+
             if (bladeturn != null)
             {
                 bool penetrate = false;
@@ -2268,38 +2208,34 @@ namespace DOL.GS
                 if (stealthStyle)
                     return eAttackResult.HitUnstyled; // Exit early for stealth to prevent breaking bubble but still register a hit.
 
-                if (ad.AttackType == AttackData.eAttackType.Ranged)
+                if (ad.Attacker.Level > bladeturn.SpellHandler.Caster.Level && !Util.ChanceDouble(bladeturn.SpellHandler.Caster.Level / (double) ad.Attacker.Level))
+                    penetrate = true;
+                else if (ad.AttackType is AttackData.eAttackType.Ranged)
                 {
                     // 1.62: Penetrating Arrow penetrate only if the caster == target. Longshot and Volley always penetrate BTs.
-                    if (ad.Target != bladeturn.SpellHandler.Caster && (playerAttacker != null && playerAttacker.HasAbility(Abilities.PenetratingArrow) ||
-                        action.RangedAttackType == eRangedAttackType.Long ||
-                        action.RangedAttackType == eRangedAttackType.Volley))
+                    if ((ad.Target != bladeturn.SpellHandler.Caster && playerAttacker != null && playerAttacker.HasAbility(Abilities.PenetratingArrow)) ||
+                        action.RangedAttackType is eRangedAttackType.Long or eRangedAttackType.Volley)
                     {
                         penetrate = true;
                     }
                 }
-                else if (ad.IsMeleeAttack && !Util.ChanceDouble(bladeturn.SpellHandler.Caster.Level / (double)ad.Attacker.Level))
-                    penetrate = true;
 
-                if (penetrate)
+                if (EffectService.RequestImmediateCancelEffect(bladeturn))
                 {
-                    if (playerOwner != null)
-                    {
+                    if (penetrate)
                         playerOwner?.Out.SendMessage(LanguageMgr.GetTranslation(playerOwner.Client.Account.Language, "GameLiving.CalculateEnemyAttackResult.BlowPenetrated"), eChatType.CT_SpellResisted, eChatLoc.CL_SystemWindow);
-                        EffectService.RequestImmediateCancelEffect(bladeturn);
-                    }
-                }
-                else
-                {
-                    if (playerOwner != null)
+                    else
                     {
-                        playerOwner?.Out.SendMessage(LanguageMgr.GetTranslation(playerOwner.Client.Account.Language, "GameLiving.CalculateEnemyAttackResult.BlowAbsorbed"), eChatType.CT_SpellResisted, eChatLoc.CL_SystemWindow);
-                        playerOwner?.Stealth(false);
-                    }
+                        playerAttacker?.Out.SendMessage(LanguageMgr.GetTranslation(playerAttacker.Client.Account.Language, "GameLiving.CalculateEnemyAttackResult.StrikeAbsorbed"), eChatType.CT_SpellResisted, eChatLoc.CL_SystemWindow);
 
-                    playerAttacker?.Out.SendMessage(LanguageMgr.GetTranslation(playerAttacker.Client.Account.Language, "GameLiving.CalculateEnemyAttackResult.StrikeAbsorbed"), eChatType.CT_SpellResisted, eChatLoc.CL_SystemWindow);
-                    EffectService.RequestImmediateCancelEffect(bladeturn);
-                    return eAttackResult.Missed;
+                        if (playerOwner != null)
+                        {
+                            playerOwner.Out.SendMessage(LanguageMgr.GetTranslation(playerOwner.Client.Account.Language, "GameLiving.CalculateEnemyAttackResult.BlowAbsorbed"), eChatType.CT_SpellResisted, eChatLoc.CL_SystemWindow);
+                            playerOwner.Stealth(false);
+                        }
+
+                        return eAttackResult.Missed;
+                    }
                 }
             }
 
@@ -2413,7 +2349,7 @@ namespace DOL.GS
                         case eAttackResult.Missed:
                             string message;
                             if (ad.MissChance > 0)
-                                message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.Miss") + $" ({ad.MissChance}%)";
+                                message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.Miss") + $" ({ad.MissChance:0.##}%)";
                             else
                                 message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.StrafMiss");
                             p.Out.SendMessage(message, eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
@@ -2458,10 +2394,10 @@ namespace DOL.GS
 
                         string attackTypeMsg;
 
-                        if (action.ActiveWeaponSlot == eActiveWeaponSlot.Distance)
-                            attackTypeMsg = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.YouShot");
-                        else
-                            attackTypeMsg = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.YouAttack");
+                            if (action.ActiveWeaponSlot is eActiveWeaponSlot.Distance)
+                                attackTypeMsg = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.YouShot");
+                            else
+                                attackTypeMsg = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.YouAttack");
 
                         // intercept messages
                         if (target != null && target != ad.Target)
@@ -2547,7 +2483,7 @@ namespace DOL.GS
                         case eAttackResult.Missed:
                             string message;
                             if (ad.MissChance > 0)
-                                message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.Miss") + $" ({ad.MissChance}%)";
+                                message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.Miss") + $" ({ad.MissChance:0.##}%)";
                             else
                                 message = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.StrafMiss");
                             p.Out.SendMessage(message, eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
@@ -2590,11 +2526,12 @@ namespace DOL.GS
                             else
                                 hitWeapon = string.Empty;
 
-                        string attackTypeMsg = LanguageMgr.GetTranslation(p.Client.Account.Language,
-                            "GamePlayer.Attack.YouAttack");
-                        if (action.ActiveWeaponSlot == eActiveWeaponSlot.Distance)
-                            attackTypeMsg = LanguageMgr.GetTranslation(p.Client.Account.Language,
-                                "GamePlayer.Attack.YouShot");
+                            string attackTypeMsg;
+
+                            if (action.ActiveWeaponSlot is eActiveWeaponSlot.Distance)
+                                attackTypeMsg = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.YouShot");
+                            else
+                                attackTypeMsg = LanguageMgr.GetTranslation(p.Client.Account.Language, "GamePlayer.Attack.YouAttack");
 
                         // intercept messages
                         if (target != null && target != ad.Target)
@@ -2683,27 +2620,29 @@ namespace DOL.GS
             }
         }
 
-        public int GetMissChance(WeaponAction action, AttackData ad, AttackData lastAD, DbInventoryItem weapon)
+        public double GetMissChance(WeaponAction action, AttackData ad, AttackData lastAD, DbInventoryItem weapon)
         {
             // No miss if the target is sitting or for Volley attacks.
-            if ((owner is IGamePlayer player && player.IsSitting) || action.RangedAttackType == eRangedAttackType.Volley)
-                return 0;
+            if ((owner is IGamePlayer player && player.IsSitting) || action.RangedAttackType is eRangedAttackType.Volley)
+               return 0;
 
-            int missChance = ad.Attacker is IGamePlayer or GameSummonedPet ? 18 : 25;
+            // In 1.117C, every weapon was given the intrinsic 5% flat bonus special weapons (such as artifacts) had, lowering the base miss rate to 13%.
+            double missChance = 18;
             missChance -= ad.Attacker.GetModified(eProperty.ToHitBonus);
 
             if (owner is not IGamePlayer || ad.Attacker is not IGamePlayer)
             {
-                missChance += 5 * ad.Attacker.GetConLevel(owner);
+                // 1.33 per level difference.
+                missChance -= (ad.Attacker.EffectiveLevel - owner.EffectiveLevel) * (1 + 1 / 3.0);
                 missChance -= Math.Max(0, Attackers.Count - 1) * Properties.MISSRATE_REDUCTION_PER_ATTACKERS;
             }
 
             // Weapon and armor bonuses.
             int armorBonus = 0;
 
-            if (ad.Target is IGamePlayer p)
+            if (ad.Target is IGamePlayer playerTarget)
             {
-                ad.ArmorHitLocation = ((IGamePlayer)ad.Target).CalculateArmorHitLocation(ad);
+                ad.ArmorHitLocation = playerTarget.CalculateArmorHitLocation(ad);
 
                 if (ad.Target.Inventory != null)
                 {
@@ -2713,7 +2652,7 @@ namespace DOL.GS
                         armorBonus = armor.Bonus;
                 }
 
-                int bonusCap = GetBonusCapForLevel(ad.Target.Level);
+                int bonusCap = GetBonusCapForLevel(playerTarget.Level);
 
                 if (armorBonus > bonusCap)
                     armorBonus = bonusCap;
@@ -2739,13 +2678,10 @@ namespace DOL.GS
             if (ad.Style != null)
                 missChance -= ad.Style.BonusToHit;
 
-            if (lastAD != null && lastAD.AttackResult == eAttackResult.HitStyle && lastAD.Style != null)
+            if (lastAD != null && lastAD.AttackResult is eAttackResult.HitStyle && lastAD.Style != null)
                 missChance += lastAD.Style.BonusToDefense;
 
-            if (owner is IGamePlayer && ad.Attacker is IGamePlayer && weapon != null)
-                missChance -= (int)((ad.Attacker.WeaponSpecLevel(weapon) - 1) * 0.1);
-
-            if (action.ActiveWeaponSlot == eActiveWeaponSlot.Distance)
+            if (action.ActiveWeaponSlot is eActiveWeaponSlot.Distance)
             {
                 DbInventoryItem ammo = ad.Attacker.rangeAttackComponent.Ammo;
 
@@ -2755,17 +2691,16 @@ namespace DOL.GS
                     {
                         // http://rothwellhome.org/guides/archery.htm
                         case 0:
-                        missChance += (int)Math.Round(missChance * 0.15);
-                        break; // Rough
+                            missChance += missChance * 0.15;
+                            break; // Rough
                         //case 1:
-                        //  missrate -= 0;
                         //  break;
                         case 2:
-                        missChance -= (int)Math.Round(missChance * 0.15);
-                        break; // doesn't exist (?)
+                            missChance -= missChance * 0.15;
+                            break; // Doesn't exist (?)
                         case 3:
-                        missChance -= (int)Math.Round(missChance * 0.25);
-                        break; // Footed
+                            missChance -= missChance * 0.25;
+                            break; // Footed
                     }
                 }
             }
@@ -2839,7 +2774,7 @@ namespace DOL.GS
                 double offhandChance = 25 + (specLevel - 1) * 68 * 0.01 + bonus;
 
                 if (playerOwner != null && playerOwner.UseDetailedCombatLog)
-                    playerOwner.Out.SendMessage($"OH swing%: {offhandChance:0.00} ({bonus}% from RAs) \n", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
+                    playerOwner.Out.SendMessage($"OH swing%: {offhandChance:0.##} ({bonus}% from RAs) \n", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
 
                 return random < offhandChance ? 1 : 0;
             }
@@ -2849,7 +2784,7 @@ namespace DOL.GS
             DbInventoryItem attackWeapon = owner.ActiveWeapon;
             DbInventoryItem leftWeapon = owner.Inventory?.GetItem(eInventorySlot.LeftHandWeapon);
 
-            if (specLevel > 0 && attackWeapon != null && leftWeapon != null && (eObjectType) leftWeapon.Object_Type == eObjectType.HandToHand)
+            if (specLevel > 0 && attackWeapon != null && leftWeapon != null && (eObjectType) leftWeapon.Object_Type is eObjectType.HandToHand)
             {
                 specLevel--;
                 double random = Util.RandomDouble() * 100;
@@ -2858,7 +2793,7 @@ namespace DOL.GS
                 double quadHitChance = tripleHitChance + specLevel * 0.0625 + bonus * 0.25; // specLevel >> 4
 
                 if (playerOwner != null && playerOwner.UseDetailedCombatLog)
-                    playerOwner.Out.SendMessage( $"Chance for 2 hits: {doubleHitChance:0.00}% | 3 hits: { (specLevel > 25 ? tripleHitChance-doubleHitChance : 0):0.00}% | 4 hits: {(specLevel > 40 ? quadHitChance-tripleHitChance : 0):0.00}% \n", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
+                    playerOwner.Out.SendMessage( $"Chance for 2 hits: {doubleHitChance:0.##}% | 3 hits: { (specLevel > 25 ? tripleHitChance-doubleHitChance : 0):0.##}% | 4 hits: {(specLevel > 40 ? quadHitChance-tripleHitChance : 0):0.##}% \n", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
 
                 if (random < doubleHitChance)
                     return 1;
@@ -2886,6 +2821,64 @@ namespace DOL.GS
                 return modifier + owner.GetModified(eProperty.OffhandDamageAndChance) * 0.01;
 
             return modifier;
+        }
+
+        public class BlockRoundHandler
+        {
+            private GameObject _owner;
+            private int _usedBlockRoundCount;
+
+            public BlockRoundHandler(GameObject owner)
+            {
+                _owner = owner;
+            }
+
+            public bool Consume(int shieldSize, AttackData attackData)
+            {
+                // Block rounds work from the point of view of the attacker and use their attack speed, similar to how interrupts work.
+                // However, according to grab bags, it's supposed to be based on the defender's swing speed. But this sounds very wrong, since it implies haste buffs should make blocking more effective.
+
+                if (attackData.Target is not IGamePlayer)
+                    return true;
+
+                // There is no need to make dual wield even more effective against shields.
+                // Returning true allow the off-hand of dual wield attacks to be blocked without consuming a block.
+                if (attackData.AttackType is AttackData.eAttackType.MeleeDualWield && attackData.IsOffHand)
+                    return true;
+
+                // Many threads can enter this block simultaneously, so we increment the count first, then decrement if we've overshot the shield size.
+                if (Interlocked.Increment(ref _usedBlockRoundCount) > shieldSize)
+                {
+                    Relinquish();
+                    return false;
+                }
+
+                // Decrement the count after a duration equal to the attack interval.
+                // We need to make sure it ticks before the attacker's next attack. We can't use `AttackData.Interval` only because `AttackAction.NextTick` is adjusted by `ServiceUtil.ShouldTickAdjust`.
+                new BlockRoundCountDecrementTimer(_owner, Relinquish).Start((int) (attackData.Attacker.attackComponent.attackAction.NextTick - GameLoop.GameLoopTime + attackData.Interval));
+                return true;
+            }
+
+            private void Relinquish()
+            {
+                Interlocked.Decrement(ref _usedBlockRoundCount);
+            }
+
+            class BlockRoundCountDecrementTimer : ECSGameTimerWrapperBase
+            {
+                private Action _decrementBlockRoundCount;
+
+                public BlockRoundCountDecrementTimer(GameObject owner, Action decrementBlockRoundCount) : base(owner)
+                {
+                    _decrementBlockRoundCount = decrementBlockRoundCount;
+                }
+
+                protected override int OnTick(ECSGameTimer timer)
+                {
+                    _decrementBlockRoundCount();
+                    return 0;
+                }
+            }
         }
 
         public class StandardAttackersCheckTimer : AttackersCheckTimer

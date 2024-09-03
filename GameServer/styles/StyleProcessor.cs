@@ -183,10 +183,10 @@ namespace DOL.GS.Styles
                     return;
                 }
 
-                // Put player into attack state before setting the styles.
-                // Changing the attack state clears out the styles.
-                if (player.attackComponent.AttackState == false || EffectListService.GetEffectOnTarget(player, eEffect.Engage) != null)
-                    player.attackComponent.RequestStartAttack(player.TargetObject);
+				// Put player into attack state before setting the styles.
+				// Changing the attack state clears out the styles.
+				if (player.attackComponent.AttackState == false || EffectListService.GetEffectOnTarget(player, eEffect.Engage) != null)
+					player.attackComponent.RequestStartAttack();
 
                 if (player.TargetObject == null)
                 {
@@ -397,7 +397,7 @@ namespace DOL.GS.Styles
 
 						// Styles with a static growth don't use unstyled damage, so armor has to be taken into account here.
 						DbInventoryItem armor = target.Inventory?.GetItem((eInventorySlot) armorHitLocation);
-						styleDamage = styleDamage * (1.0 - Math.Min(0.85, target.GetArmorAbsorb(armorHitLocation)));
+						styleDamage = styleDamage * (1.0 - target.GetArmorAbsorb(armorHitLocation));
 						styleDamageCap = -1; // Uncapped. Is there supposed to be one?
 					}
 					else
@@ -743,20 +743,20 @@ namespace DOL.GS.Styles
                 delveInfo.Add(string.Format("- Error: Opening Requirement '{0}' but requirement type is Any!", style.OpeningRequirementValue));
             }
 
-            temp = "";
+			temp = string.Empty;
 
-            foreach (Style st in SkillBase.GetStyleList(style.Spec, player.CharacterClass.ID))
-            {
-                if (st.AttackResultRequirement == Style.eAttackResultRequirement.Style && st.OpeningRequirementValue == style.ID)
-                {
-                    temp = (temp == "" ? st.Name : temp + LanguageMgr.GetTranslation(player.Client.Account.Language, "DetailDisplayHandler.HandlePacket.Or", st.Name));
-                }
-            }
+			foreach (Style st in SkillBase.GetStyleList(style.Spec, player.CharacterClass.ID))
+			{
+				if (st.AttackResultRequirement == Style.eAttackResultRequirement.Style && st.OpeningRequirementValue == style.ID)
+				{
+					temp = (temp == string.Empty ? st.Name : temp + LanguageMgr.GetTranslation(player.Client.Account.Language, "DetailDisplayHandler.HandlePacket.Or", st.Name));
+				}
+			}
 
-            if (temp != "")
-            {
-                delveInfo.Add(LanguageMgr.GetTranslation(player.Client.Account.Language, "DetailDisplayHandler.HandlePacket.FollowupStyle", temp));
-            }
+			if (temp != string.Empty)
+			{
+				delveInfo.Add(LanguageMgr.GetTranslation(player.Client.Account.Language, "DetailDisplayHandler.HandlePacket.FollowupStyle", temp));
+			}
 
             temp = LanguageMgr.GetTranslation(player.Client.Account.Language, "DetailDisplayHandler.HandlePacket.FatigueCost") + " ";
 
@@ -893,44 +893,44 @@ namespace DOL.GS.Styles
 				}
 			}
 
-            if (player.Client.Account.PrivLevel > 1)
-            {
-                delveInfo.Add(" ");
-                delveInfo.Add("--- Style Technical Information ---");
-                delveInfo.Add(" ");
-                delveInfo.Add(string.Format("ID: {0}", style.ID));
-                delveInfo.Add(string.Format("ClassID: {0}", style.ClassID));
-                delveInfo.Add(string.Format("Icon: {0}", style.Icon));
-                delveInfo.Add(string.Format("TwoHandAnimation: {0}", style.TwoHandAnimation));
-                delveInfo.Add(string.Format("Spec: {0}", style.Spec));
-                delveInfo.Add(string.Format("SpecLevelRequirement: {0}", style.SpecLevelRequirement));
-                delveInfo.Add(string.Format("Level: {0}", style.Level));
-                delveInfo.Add(string.Format("GrowthOffset: {0}", style.GrowthOffset));
-                delveInfo.Add(string.Format("GrowthRate: {0}", style.GrowthRate));
-                delveInfo.Add(string.Format("Endurance: {0}", style.EnduranceCost));
-                delveInfo.Add(string.Format("StealthRequirement: {0}", style.StealthRequirement));
-                delveInfo.Add(string.Format("WeaponTypeRequirement: {0}", style.WeaponTypeRequirement));
-                string indicator = "";
-                if (style.OpeningRequirementValue != 0 && style.AttackResultRequirement == 0 && style.OpeningRequirementType == 0)
-                {
-                    indicator = "!!";
-                }
-                delveInfo.Add(string.Format("AttackResultRequirement: {0}({1}) {2}", style.AttackResultRequirement, (int)style.AttackResultRequirement, indicator));
-                delveInfo.Add(string.Format("OpeningRequirementType: {0}({1}) {2}", style.OpeningRequirementType, (int)style.OpeningRequirementType, indicator));
-                delveInfo.Add(string.Format("OpeningRequirementValue: {0}", style.OpeningRequirementValue));
-                delveInfo.Add(string.Format("ArmorHitLocation: {0}({1})", style.ArmorHitLocation, (int)style.ArmorHitLocation));
-                delveInfo.Add(string.Format("BonusToDefense: {0}", style.BonusToDefense));
-                delveInfo.Add(string.Format("BonusToHit: {0}", style.BonusToHit));
+			if (player.Client.Account.PrivLevel > 1)
+			{
+				delveInfo.Add(" ");
+				delveInfo.Add("--- Style Technical Information ---");
+				delveInfo.Add(" ");
+				delveInfo.Add(string.Format("ID: {0}", style.ID));
+				delveInfo.Add(string.Format("ClassID: {0}", style.ClassID));
+				delveInfo.Add(string.Format("Icon: {0}", style.Icon));
+				delveInfo.Add(string.Format("TwoHandAnimation: {0}", style.TwoHandAnimation));
+				delveInfo.Add(string.Format("Spec: {0}", style.Spec));
+				delveInfo.Add(string.Format("SpecLevelRequirement: {0}", style.SpecLevelRequirement));
+				delveInfo.Add(string.Format("Level: {0}", style.Level));
+				delveInfo.Add(string.Format("GrowthOffset: {0}", style.GrowthOffset));
+				delveInfo.Add(string.Format("GrowthRate: {0}", style.GrowthRate));
+				delveInfo.Add(string.Format("Endurance: {0}", style.EnduranceCost));
+				delveInfo.Add(string.Format("StealthRequirement: {0}", style.StealthRequirement));
+				delveInfo.Add(string.Format("WeaponTypeRequirement: {0}", style.WeaponTypeRequirement));
+				string indicator = string.Empty;
+				if (style.OpeningRequirementValue != 0 && style.AttackResultRequirement == 0 && style.OpeningRequirementType == 0)
+				{
+					indicator = "!!";
+				}
+				delveInfo.Add(string.Format("AttackResultRequirement: {0}({1}) {2}", style.AttackResultRequirement, (int)style.AttackResultRequirement, indicator));
+				delveInfo.Add(string.Format("OpeningRequirementType: {0}({1}) {2}", style.OpeningRequirementType, (int)style.OpeningRequirementType, indicator));
+				delveInfo.Add(string.Format("OpeningRequirementValue: {0}", style.OpeningRequirementValue));
+				delveInfo.Add(string.Format("ArmorHitLocation: {0}({1})", style.ArmorHitLocation, (int)style.ArmorHitLocation));
+				delveInfo.Add(string.Format("BonusToDefense: {0}", style.BonusToDefense));
+				delveInfo.Add(string.Format("BonusToHit: {0}", style.BonusToHit));
 
                 if (style.Procs != null && style.Procs.Count > 0)
                 {
                     delveInfo.Add(" ");
 
-                    string procs = "";
-                    foreach ((Spell, int, int) spell in style.Procs)
-                    {
-                        if (procs != "")
-                            procs += ", ";
+					string procs = string.Empty;
+					foreach ((Spell, int, int) spell in style.Procs)
+					{
+						if (procs != string.Empty)
+							procs += ", ";
 
                         procs += spell.Item1.ID;
                     }

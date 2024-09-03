@@ -1,22 +1,3 @@
-/*
- * DAWN OF LIGHT - The first free open source DAoC server emulator
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
- *
- */
-
 using System;
 using System.Collections.Generic;
 using DOL.Database;
@@ -57,7 +38,7 @@ namespace DOL.GS.Commands
 
 			if (args.Length > 1 && args[1] == "show" && client.Player != null)
 			{
-				if (client.Player.TempProperties.GetProperty(DoorMgr.WANT_TO_ADD_DOORS, false))
+				if (client.Player.TempProperties.GetProperty<bool>(DoorMgr.WANT_TO_ADD_DOORS))
 				{
 					client.Player.TempProperties.RemoveProperty(DoorMgr.WANT_TO_ADD_DOORS);
 					client.Out.SendMessage("You will no longer be shown the add door dialog.", eChatType.CT_System,
@@ -240,12 +221,12 @@ namespace DOL.GS.Commands
 
 		private void name(GameClient client, GameDoor targetDoor, string[] args)
 		{
-			string doorName = "";
+			string doorName = string.Empty;
 
 			if (args.Length > 2)
 				doorName = String.Join(" ", args, 2, args.Length - 2);
 
-			if (doorName != "")
+			if (doorName != string.Empty)
 			{
 				targetDoor.Name = CheckName(doorName, client);
 				targetDoor.SaveIntoDatabase();
@@ -284,12 +265,12 @@ namespace DOL.GS.Commands
 
 		private void guild(GameClient client, GameDoor targetDoor, string[] args)
 		{
-			string guildName = "";
+			string guildName = string.Empty;
 
 			if (args.Length > 2)
 				guildName = String.Join(" ", args, 2, args.Length - 2);
 
-			if (guildName != "")
+			if (guildName != string.Empty)
 			{
 				targetDoor.GuildName = CheckGuildName(guildName, client);
 				targetDoor.SaveIntoDatabase();
@@ -298,9 +279,9 @@ namespace DOL.GS.Commands
 			}
 			else
 			{
-				if (targetDoor.GuildName != "")
+				if (targetDoor.GuildName != string.Empty)
 				{
-					targetDoor.GuildName = "";
+					targetDoor.GuildName = string.Empty;
 					targetDoor.SaveIntoDatabase();
 					client.Out.SendMessage("Door guild removed", eChatType.CT_System, eChatLoc.CL_SystemWindow);
 				}
@@ -420,10 +401,8 @@ namespace DOL.GS.Commands
 			{
 				lock (targetDoor.XPGainers.SyncRoot)
 				{
-					targetDoor.attackComponent.AddAttacker(client.Player);
 					targetDoor.AddXPGainer(client.Player, targetDoor.Health);
 					targetDoor.Die(client.Player);
-					targetDoor.XPGainers.Clear();
 					client.Out.SendMessage("Door " + targetDoor.Name + " health reaches 0", eChatType.CT_System,
 										   eChatLoc.CL_SystemWindow);
 				}

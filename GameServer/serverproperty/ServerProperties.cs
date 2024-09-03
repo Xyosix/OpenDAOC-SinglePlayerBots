@@ -165,7 +165,7 @@ namespace DOL.GS.ServerProperties
 		/// A serialised list of disabled expansion IDs
 		/// </summary>
 		[ServerProperty("system", "disabled_expansions", "Serialized list of disabled expansions IDs, expansion IDs are client type seperated by ;", "")]
-		public static string DISABLED_EXPANSIONS = "";
+		public static string DISABLED_EXPANSIONS = string.Empty;
 
 		/// <summary>
 		/// Server Language
@@ -659,7 +659,7 @@ namespace DOL.GS.ServerProperties
 		/// A serialised list of disabled RegionIDs
 		/// </summary>
 		[ServerProperty("world", "disabled_regions", "Serialized list of disabled region IDs, separated by semi-colon or a range with a dash (ie 1-5;7;9)", "")]
-		public static string DISABLED_REGIONS = "";
+		public static string DISABLED_REGIONS = string.Empty;
 
 		/// <summary>
 		/// Should the server disable the tutorial zone
@@ -781,12 +781,6 @@ namespace DOL.GS.ServerProperties
 		public static int XP_PVP_CAP_PERCENT;
 
 		/// <summary>
-		/// Hardcap XP a player can earn after all other adjustments are applied.  Given in percent of level, default is 500%  There is no live value that corresponds to this cap.
-		/// </summary>
-		[ServerProperty("rates", "XP_HardCap_Percent", "Hardcap XP a player can earn after all other adjustments are applied. Given in percent of their level. Default is 500%", 500)]
-		public static int XP_HARDCAP_PERCENT;
-
-		/// <summary>
 		/// The Experience Rate
 		/// </summary>
 		[ServerProperty("rates", "xp_rate", "The Experience Points Rate Modifier - Edit this to change the rate at which you gain experience points e.g 1.5 is 50% more 2.0 is twice the amount (100%) 0.5 is half the amount (50%)", 1.0)]
@@ -829,12 +823,6 @@ namespace DOL.GS.ServerProperties
 		public static double PVE_SPELL_DAMAGE = 1.0;
 
 		/// <summary>
-		/// The percent per con difference (-1 = blue, 0 = yellow, 1 = OJ, 2 = red ...) subtracted to hitchance for spells in PVE.  0 is none, 5 is 5% per con, etc.  Default is 10%
-		/// </summary>
-		[ServerProperty("rates", "pve_spell_conhitpercent", "The percent per con (1 = OJ, 2 = red ...) subtracted to hitchance for spells in PVE  Must be >= 0.  0 is none, 5 is 5% per level, etc.  Default is 10%", (uint)10)]
-		public static uint PVE_SPELL_CONHITPERCENT;
-
-		/// <summary>
 		/// The damage players do against players with melee
 		/// </summary>
 		[ServerProperty("rates", "pvp_melee_damage", "The PvP Melee Damage Modifier - Edit this to change the amount of melee damage done when fighting players e.g 1.5 is 50% more damage 2.0 is twice the damage (100%) 0.5 is half the damage (50%)", 1.0)]
@@ -869,12 +857,6 @@ namespace DOL.GS.ServerProperties
 		/// </summary>
 		[ServerProperty("rates", "parry_cap", "Parry Rate Cap Modifier - Edit this to change the highest possible parry rate against an enemy (Hard Cap) in game e.g .50 = 50%", 0.50)]
 		public static double PARRY_CAP;
-
-		/// <summary>
-		/// Critical strike opening style effectiveness.  Increase this to make CS styles BS, BSII and Perf Artery more effective
-		/// </summary>
-		[ServerProperty("rates", "cs_opening_effectiveness", "Critical strike opening style effectiveness.  Increase this to make CS styles BS, BSII and Perf Artery more effective", 1.0)]
-		public static double CS_OPENING_EFFECTIVENESS;
 
 		/// <summary>
 		/// The money drop modifier
@@ -930,7 +912,7 @@ namespace DOL.GS.ServerProperties
 		[ServerProperty("rates", "mana_regen_amount_modifier", "Mana regen amount modifier", 1.0)]
 		public static double MANA_REGEN_AMOUNT_MODIFIER;
 
-		[ServerProperty("rates", "mana_regen_amount_halved_below_50_percent", "Should the mana regen amount be halved below 50%?", false)]
+		[ServerProperty("rates", "mana_regen_amount_halved_below_50_percent", "Should the mana regen amount be halved below 50%? Affects list casters only.", false)]
 		public static bool MANA_REGEN_AMOUNT_HALVED_BELOW_50_PERCENT;
 
 		/// <summary>

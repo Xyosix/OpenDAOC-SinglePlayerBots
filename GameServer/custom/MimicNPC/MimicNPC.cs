@@ -8,6 +8,7 @@ using DOL.GS.PacketHandler;
 using DOL.GS.PacketHandler.Client.v168;
 using DOL.GS.PlayerClass;
 using DOL.GS.PropertyCalc;
+using DOL.GS.Quests;
 using DOL.GS.Realm;
 using DOL.GS.RealmAbilities;
 using DOL.GS.ServerProperties;
@@ -282,12 +283,15 @@ namespace DOL.GS.Scripts
             if (!base.Interact(player))
                 return false;
 
-            player.Out.SendMessage("[State] [Prevent Combat] [Brain]\n " +
-                "[Group] - [Leader] - [MainPuller] - [MainCC] - [MainTank] - [MainAssist]\n " +
-                "[Spells] - [Inst Harmful] - [Harmful Spells] - [Inst Misc] - [Misc Spells] - [Inst Heal] - [Heal Spells]\n " +
-                "[Styles] - [Abilities]\n " +
-                "[Spec] - [Stats]\n " +
-                "[Hood] [Weapon] [Helm] [Torso] [Legs] [Arms] [Hands] [Boots] [Jewelry]\n " +
+            player.Out.SendMessage(
+                "---------------------------------------\n" +
+                "[State] [Prevent Combat] [Brain]\n\n " +
+                "[Group] - [Leader] - [MainPuller] - [MainCC] - [MainTank] - [MainAssist]\n\n " +
+                "[Guard]\n\n " +
+                "[Spells] - [Inst Harmful] - [Harmful Spells] - [Inst Misc] - [Misc Spells] - [Inst Heal] - [Heal Spells] - [CC]\n\n " +
+                "[Styles] - [Abilities]\n\n " +
+                "[Spec] - [Stats] - [Ability Effects] - [Spell Effects]\n\n " +
+                "[Hood] [Weapon] [Helm] [Torso] [Legs] [Arms] [Hands] [Boots] [Jewelry]\n\n " +
                 "[Delete]", eChatType.CT_Say, eChatLoc.CL_PopupWindow);
             return true;
         }
@@ -302,6 +306,8 @@ namespace DOL.GS.Scripts
             if (player == null)
                 return false;
 
+            string message = string.Empty;
+
             switch (str)
             {
                 case "Brain":
@@ -312,10 +318,9 @@ namespace DOL.GS.Scripts
 
                 case "State":
                 {
-                    string message = Brain.FSM.GetCurrentState().ToString();
-                    SendReply(player, message);
+                    message = Brain.FSM.GetCurrentState().ToString();
+                    break;
                 }
-                break;
 
                 case "Prevent Combat": MimicBrain.PreventCombat = !MimicBrain.PreventCombat; break;
 
@@ -349,32 +354,41 @@ namespace DOL.GS.Scripts
                 case "MainTank": Group?.MimicGroup.SetMainTank(this); break;
                 case "MainAssist": Group?.MimicGroup.SetMainAssist(this); break;
 
-                case "Spells":
+                case "Guard":
                 {
-                    string message = string.Empty;
-
-                    foreach (Spell spell in Spells)
+                    if (!HasAbility("Guard"))
                     {
-                        message += spell.Name + " " + spell.Level + " " + spell.SpellType + "\n";
+                        message = "I do not have that ability.";
+                        break;
                     }
 
-                    SendReply(player, message);
+                    if (MimicBrain.SetGuard(player, out bool foundOurEffect))
+                        message = "I will guard you.";
+                    else
+                    {
+                        if (foundOurEffect)
+                            message = "I will no longer guard you.";
+                        else
+                            message = "I cannot guard you.";
+                    }
+
+                    break;
+                }
+
+                case "Spells":
+                {
+                    foreach (Spell spell in Spells)
+                        message += spell.Name + " " + spell.Level + " " + spell.SpellType + "\n";
 
                     break;
                 }
 
                 case "Inst Harmful":
                 {
-                    string message = string.Empty;
-
                     if (CanCastInstantHarmfulSpells)
                     {
                         foreach (Spell spell in InstantHarmfulSpells)
-                        {
                             message += spell.Name + " " + spell.Level + " " + spell.SpellType + "\n";
-                        }
-
-                        SendReply(player, message);
                     }
 
                     break;
@@ -382,16 +396,10 @@ namespace DOL.GS.Scripts
 
                 case "Harmful Spells":
                 {
-                    string message = string.Empty;
-
                     if (CanCastHarmfulSpells)
                     {
                         foreach (Spell spell in HarmfulSpells)
-                        {
                             message += spell.Name + " " + spell.Level + " " + spell.SpellType + "\n";
-                        }
-
-                        SendReply(player, message);
                     }
 
                     break;
@@ -399,16 +407,10 @@ namespace DOL.GS.Scripts
 
                 case "Inst Misc":
                 {
-                    string message = string.Empty;
-
                     if (CanCastInstantMiscSpells)
                     {
                         foreach (Spell spell in InstantMiscSpells)
-                        {
                             message += spell.Name + " " + spell.Level + " " + spell.SpellType + "\n";
-                        }
-
-                        SendReply(player, message);
                     }
 
                     break;
@@ -416,16 +418,10 @@ namespace DOL.GS.Scripts
 
                 case "Misc Spells":
                 {
-                    string message = string.Empty;
-
                     if (CanCastMiscSpells)
                     {
                         foreach (Spell spell in MiscSpells)
-                        {
                             message += spell.Name + " " + spell.Level + " " + spell.SpellType + "\n";
-                        }
-
-                        SendReply(player, message);
                     }
 
                     break;
@@ -433,16 +429,10 @@ namespace DOL.GS.Scripts
 
                 case "Inst Heal":
                 {
-                    string message = string.Empty;
-
                     if (CanCastInstantHealSpells)
                     {
                         foreach (Spell spell in InstantHealSpells)
-                        {
                             message += spell.Name + " " + spell.Level + " " + spell.SpellType + "\n";
-                        }
-
-                        SendReply(player, message);
                     }
 
                     break;
@@ -450,16 +440,21 @@ namespace DOL.GS.Scripts
 
                 case "Heal Spells":
                 {
-                    string message = string.Empty;
-
                     if (CanCastHealSpells)
                     {
                         foreach (Spell spell in HealSpells)
-                        {
                             message += spell.Name + " " + spell.Level + " " + spell.SpellType + "\n";
-                        }
+                    }
 
-                        SendReply(player, message);
+                    break;
+                }
+
+                case "CC":
+                {
+                    if (CanCastCrowdControlSpells)
+                    {
+                        foreach (Spell spell in CrowdControlSpells)
+                            message += spell.Name + " " + spell.Level + " " + spell.SpellType + "\n";
                     }
 
                     break;
@@ -467,68 +462,76 @@ namespace DOL.GS.Scripts
 
                 case "Styles":
                 {
-                    string message = string.Empty;
-
                     foreach (Style style in Styles)
-                    {
                         message += style.Name + " " + style.Level + "\n";
-                    }
-
-                    SendReply(player, message);
 
                     break;
                 }
 
                 case "Abilities":
                 {
-                    string message = string.Empty;
-
                     foreach (Ability ability in GetAllAbilities())
-                    {
                         message += ability.Name + " " + ability.Level + "\n";
+
+                    break;
+                }
+
+                case "Ability Effects":
+                {
+                    List<ECSGameAbilityEffect> abilityEffects = player.EffectListComponent.GetAbilityEffects();
+
+                    foreach (ECSGameAbilityEffect abilityEffect in abilityEffects)
+                    {
+                        if (abilityEffect != null)
+                            message += abilityEffect?.Name + "\n";
                     }
 
-                    SendReply(player, message);
+                    break;
+                }
+
+                case "Spell Effects":
+                {
+                    foreach (ECSGameSpellEffect spellEffect in EffectListComponent.GetSpellEffects())
+                    {
+                        if (spellEffect != null)
+                            message += spellEffect?.Name + "\n";
+                    }
 
                     break;
                 }
 
                 case "Stats":
-                SendReply(player, string.Format("Level: {0}\n Str: {1}\n Con: {2}\n Dex: {3}\n Qui: {4}\n Int: {5}\n Pie: {6}\n Emp: {7}\n Cha: {8}\n" +
-                    " HP: {9}\n AF: {10}\n, End: {11}\n Power: {12}\n",
-                    Level,
-                    Strength,
-                    Constitution,
-                    Dexterity,
-                    Quickness,
-                    Intelligence,
-                    Piety,
-                    Empathy,
-                    Charisma,
-                    Health,
-                    EffectiveOverallAF,
-                    Endurance,
-                    Mana));
-                break;
-
-                case "Spec":
                 {
-                    string message = string.Empty;
-
-                    var specs = GetSpecList();
-
-                    foreach (Specialization spec in specs)
-                    {
-                        message += spec.Name + ": " + spec.Level + " \n";
-                    }
-
-                    SendReply(player, message + DisplayedWeaponSkill);
+                    message = string.Format("Level: {0}\n Str: {1}\n Con: {2}\n Dex: {3}\n Qui: {4}\n Int: {5}\n Pie: {6}\n Emp: {7}\n Cha: {8}\n" +
+                                            " HP: {9}\n AF: {10}\n, End: {11}\n Power: {12}\n",
+                                            Level,
+                                            Strength,
+                                            Constitution,
+                                            Dexterity,
+                                            Quickness,
+                                            Intelligence,
+                                            Piety,
+                                            Empathy,
+                                            Charisma,
+                                            Health,
+                                            EffectiveOverallAF,
+                                            Endurance,
+                                            Mana);
 
                     break;
                 }
 
-                case "Hood":
-                IsCloakHoodUp = !IsCloakHoodUp; break;
+                case "Spec":
+                {
+                    var specs = GetSpecList();
+
+                    foreach (Specialization spec in specs)
+                        message += spec.Name + ": " + spec.Level + " \n";
+
+                    break;
+                }
+
+                case "Hood": IsCloakHoodUp = !IsCloakHoodUp; break;
 
                 case "Helm":
                 {
@@ -540,12 +543,9 @@ namespace DOL.GS.Scripts
 
                         if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
                         {
-                            player.SendPrivateMessage(player, "No room in your backpack you twat.");
+                            player.SendPrivateMessage(player, "No room in your backpack.");
                             Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
                         }
-
-                        if (Inventory.AllItems.Contains(item))
-                            log.Debug("Still has that shit.");
                     }
 
                     BroadcastLivingEquipmentUpdate();
@@ -562,7 +562,7 @@ namespace DOL.GS.Scripts
 
                         if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
                         {
-                            player.SendPrivateMessage(player, "No room in your backpack you twat.");
+                            player.SendPrivateMessage(player, "No room in your backpack.");
                             Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
                         }
                     }
@@ -581,7 +581,7 @@ namespace DOL.GS.Scripts
 
                         if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
                         {
-                            player.SendPrivateMessage(player, "No room in your backpack you twat.");
+                            player.SendPrivateMessage(player, "No room in your backpack.");
                             Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
                         }
                     }
@@ -600,7 +600,7 @@ namespace DOL.GS.Scripts
 
                         if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
                         {
-                            player.SendPrivateMessage(player, "No room in your backpack you twat.");
+                            player.SendPrivateMessage(player, "No room in your backpack.");
                             Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
                         }
                     }
@@ -619,7 +619,7 @@ namespace DOL.GS.Scripts
 
                         if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
                         {
-                            player.SendPrivateMessage(player, "No room in your backpack you twat.");
+                            player.SendPrivateMessage(player, "No room in your backpack.");
                             Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
                         }
                     }
@@ -638,7 +638,7 @@ namespace DOL.GS.Scripts
 
                         if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
                         {
-                            player.SendPrivateMessage(player, "No room in your backpack you twat.");
+                            player.SendPrivateMessage(player, "No room in your backpack.");
                             Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
                         }
                     }
@@ -657,7 +657,7 @@ namespace DOL.GS.Scripts
 
                         if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
                         {
-                            player.SendPrivateMessage(player, "No room in your backpack you twat.");
+                            player.SendPrivateMessage(player, "No room in your backpack.");
                             Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
                         }
                     }
@@ -676,8 +676,9 @@ namespace DOL.GS.Scripts
                         DbInventoryItem item = Inventory.GetItem((eInventorySlot)i);
                         player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item);
                     }
+
+                    break;
                 }
-                break;
 
                 case "Delete":
                 {
@@ -695,12 +696,10 @@ namespace DOL.GS.Scripts
                 default: break;
             }
 
-            return true;
-        }
+            if (message.Length > 0)
+                player.Out.SendMessage(message, eChatType.CT_System, eChatLoc.CL_PopupWindow);
 
-        private void SendReply(GamePlayer player, string msg)
-        {
-            player.Out.SendMessage(msg, eChatType.CT_System, eChatLoc.CL_PopupWindow);
+            return true;
         }
 
         public override bool SayReceive(GameLiving source, string str)
@@ -901,7 +900,7 @@ namespace DOL.GS.Scripts
         {
             bool equalSpells = spellOne.DamageType == spellTwo.DamageType &&
                                spellOne.SpellType == spellTwo.SpellType &&
-                               spellOne.Frequency == spellTwo.Frequency ||
+                               spellOne.Frequency == spellTwo.Frequency &&
                                spellOne.CastTime == spellTwo.CastTime &&
                                spellOne.Target == spellTwo.Target &&
                                spellOne.Group == spellTwo.Group &&
@@ -1256,13 +1255,7 @@ namespace DOL.GS.Scripts
             if (!(base.AddToWorld()))
                 return false;
 
-            m_healthRegenerationTimer = new ECSGameTimer(this);
-            m_powerRegenerationTimer = new ECSGameTimer(this);
-            m_enduRegenerationTimer = new ECSGameTimer(this);
-
-            m_healthRegenerationTimer.Callback = new ECSGameTimer.ECSTimerCallback(HealthRegenerationTimerCallback);
-            m_powerRegenerationTimer.Callback = new ECSGameTimer.ECSTimerCallback(PowerRegenerationTimerCallback);
-            m_enduRegenerationTimer.Callback = new ECSGameTimer.ECSTimerCallback(EnduranceRegenerationTimerCallback);
+            RandomNumberDeck = new PlayerDeck();
 
             return true;
         }
@@ -2705,65 +2698,28 @@ namespace DOL.GS.Scripts
 
         #region Health/Mana/Endurance/Regeneration
 
-        /// <summary>
-        /// Starts the health regeneration.
-        /// Overriden. No lazy timers for GamePlayers.
-        /// </summary>
-        public override void StartHealthRegeneration()
-        {
-            if (!IsAlive || ObjectState != eObjectState.Active)
-                return;
-
-            if (m_healthRegenerationTimer is { IsAlive: true })
-                return;
-
-            if (m_healthRegenerationTimer == null)
-            {
-                m_healthRegenerationTimer = new ECSGameTimer(this);
-                m_healthRegenerationTimer.Callback = new ECSGameTimer.ECSTimerCallback(HealthRegenerationTimerCallback);
-            }
-            else if (m_healthRegenerationTimer.IsAlive)
-            {
-                return;
-            }
-
-            m_healthRegenerationTimer.Start(m_healthRegenerationPeriod);
-        }
-
-        /// <summary>
-        /// Starts the power regeneration.
-        /// Overriden. No lazy timers for GamePlayers.
-        /// </summary>
         public override void StartPowerRegeneration()
         {
-            if (ObjectState != eObjectState.Active) return;
-            if (m_powerRegenerationTimer is { IsAlive: true }) return;
-            if (m_powerRegenerationTimer == null)
-            {
-                m_powerRegenerationTimer = new ECSGameTimer(this);
-                m_powerRegenerationTimer.Callback = new ECSGameTimer.ECSTimerCallback(PowerRegenerationTimerCallback);
-            }
+            if (!IsAlive || ObjectState is not eObjectState.Active)
+                return;
 
-            PowerRegenStackingBonus = 0;
+            if (m_powerRegenerationTimer == null)
+                m_powerRegenerationTimer = new(this, new ECSGameTimer.ECSTimerCallback(PowerRegenerationTimerCallback));
+            else if (m_powerRegenerationTimer.IsAlive)
+                return;
+
             m_powerRegenerationTimer.Start(m_powerRegenerationPeriod);
         }
 
-        /// <summary>
-        /// Starts the endurance regeneration.
-        /// Overriden. No lazy timers for GamePlayers.
-        /// </summary>
         public override void StartEnduranceRegeneration()
         {
-            if (ObjectState != eObjectState.Active)
+            if (!IsAlive || ObjectState is not eObjectState.Active)
                 return;
 
-            if (m_enduRegenerationTimer is { IsAlive: true }) return;
             if (m_enduRegenerationTimer == null)
-            {
-                m_enduRegenerationTimer = new ECSGameTimer(this);
-                m_enduRegenerationTimer.Callback =
-                    new ECSGameTimer.ECSTimerCallback(EnduranceRegenerationTimerCallback);
-            }
+                m_enduRegenerationTimer = new(this, new ECSGameTimer.ECSTimerCallback(EnduranceRegenerationTimerCallback));
+            else if (m_enduRegenerationTimer.IsAlive)
+                return;
 
             m_enduRegenerationTimer.Start(m_enduranceRegenerationPeriod);
         }
@@ -5324,111 +5280,133 @@ namespace DOL.GS.Scripts
         /// <summary>
         /// Called whenever this player gains experience
         /// </summary>
-        /// <param name="expTotal"></param>
-        /// <param name="expCampBonus"></param>
-        /// <param name="expGroupBonus"></param>
-        /// <param name="expOutpostBonus"></param>
-        /// <param name="sendMessage"></param>
-        public void GainExperience(eXPSource xpSource, long expTotal, long expCampBonus, long expGroupBonus, long expOutpostBonus, bool sendMessage)
+        public override void GainExperience(GainedExperienceEventArgs arguments, bool notify = true)
         {
-            GainExperience(xpSource, expTotal, expCampBonus, expGroupBonus, expOutpostBonus, sendMessage, true);
-        }
+            long expTotal = arguments.ExpTotal;
 
-        /// <summary>
-        /// Called whenever this player gains experience
-        /// </summary>
-        /// <param name="expTotal"></param>
-        /// <param name="expCampBonus"></param>
-        /// <param name="expGroupBonus"></param>
-        /// <param name="expOutpostBonus"></param>
-        /// <param name="sendMessage"></param>
-        /// <param name="allowMultiply"></param>
-        public void GainExperience(eXPSource xpSource, long expTotal, long expCampBonus, long expGroupBonus, long expOutpostBonus, bool sendMessage, bool allowMultiply)
-        {
-            GainExperience(xpSource, expTotal, expCampBonus, expGroupBonus, expOutpostBonus, sendMessage, allowMultiply, true);
-        }
-
-        /// <summary>
-        /// Called whenever this player gains experience
-        /// </summary>
-        /// <param name="expTotal"></param>
-        /// <param name="expCampBonus"></param>
-        /// <param name="expGroupBonus"></param>
-        /// <param name="expOutpostBonus"></param>
-        /// <param name="sendMessage"></param>
-        /// <param name="allowMultiply"></param>
-        /// <param name="notify"></param>
-        public override void GainExperience(eXPSource xpSource, long expTotal, long expCampBonus, long expGroupBonus, long expOutpostBonus, bool sendMessage, bool allowMultiply, bool notify)
-        {
             if (!GainXP && expTotal > 0)
                 return;
 
-            long baseXp = 0;
-            //xp rate modifier
-            if (allowMultiply)
+            if (this.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY) != null)
             {
-                //we only want to modify the base rate, not the group or camp bonus
-                expTotal -= expGroupBonus;
-                expTotal -= expCampBonus;
-                expTotal -= expOutpostBonus;
+                Out.SendMessage($"You may not gain experience while in a battlegroup.", eChatType.CT_System, eChatLoc.CL_SystemWindow);
+                return;
+            }
 
-                baseXp = expTotal;
-                //[StephenxPimentel] - Zone Bonus XP Support
-                if (ServerProperties.Properties.ENABLE_ZONE_BONUSES)
+            int numCurrentLoyalDays = this.TempProperties.GetProperty<int>(CURRENT_LOYALTY_KEY);
+            //check for cached loyalty days, and grab value if needed
+            if (numCurrentLoyalDays == 0)
+            {
+                DbAccountXRealmLoyalty realmLoyalty = DOLDB<DbAccountXRealmLoyalty>.SelectObject(DB.Column("AccountID").IsEqualTo(this.Client.Account.ObjectId).And(DB.Column("Realm").IsEqualTo(this.Realm)));
+                if (realmLoyalty == null)
                 {
-                    //long zoneBonus = expTotal * ZoneBonus.GetXPBonus(this) / 100;
-                    //if (zoneBonus > 0)
-                    //{
-                    //    long tmpBonus = (long)(zoneBonus * ServerProperties.Properties.XP_RATE);
-                    //    Out.SendMessage(ZoneBonus.GetBonusMessage(this, (int)tmpBonus, ZoneBonus.eZoneBonusType.XP),
-                    //        eChatType.CT_Important, eChatLoc.CL_SystemWindow);
-                    //    GainExperience(eXPSource.Other, tmpBonus, 0, 0, 0, 0, false, false, false);
-                    //}
+                    DbAccountXRealmLoyalty newLoyalty = new DbAccountXRealmLoyalty();
+                    newLoyalty.AccountId = this.Client.Account.ObjectId;
+                    newLoyalty.Realm = (int)this.Realm;
+                    newLoyalty.LoyalDays = 1;
+                    numCurrentLoyalDays = 1;
+                    newLoyalty.LastLoyaltyUpdate = DateTime.Now;
+                    GameServer.Database.AddObject(newLoyalty);
                 }
-
-                if (CurrentRegion.IsRvR)
-                    expTotal = (long)(expTotal * ServerProperties.Properties.RvR_XP_RATE);
                 else
-                    expTotal = (long)(expTotal * ServerProperties.Properties.XP_RATE);
-
-                // [Freya] Nidel: ToA Xp Bonus
-                long xpBonus = GetModified(eProperty.XpPoints);
-                if (xpBonus != 0)
                 {
-                    expTotal += (expTotal * xpBonus) / 100;
+                    numCurrentLoyalDays = realmLoyalty.LoyalDays;
                 }
 
-                long hardXPCap = (long)(GameServer.ServerRules.GetExperienceForLiving(Level) * ServerProperties.Properties.XP_HARDCAP_PERCENT / 100);
+                this.TempProperties.SetProperty(CURRENT_LOYALTY_KEY, numCurrentLoyalDays);
+            }
 
-                if (expTotal > hardXPCap)
-                    expTotal = hardXPCap;
+            //check for realm loyalty
+            var loyaltyCheck = this.TempProperties.GetProperty<DateTime>(REALM_LOYALTY_KEY);
 
-                expTotal += expOutpostBonus;
-                expTotal += expGroupBonus;
-                expTotal += expCampBonus;
+            if (loyaltyCheck < DateTime.Now.AddDays(-1))
+            {
+                List<DbAccountXRealmLoyalty> rloyal = new List<DbAccountXRealmLoyalty>(DOLDB<DbAccountXRealmLoyalty>.SelectObjects(DB.Column("AccountID").IsEqualTo(this.Client.Account.ObjectId)));
+                bool realmFound = false;
+                foreach (var rl in rloyal)
+                {
+                    if (rl.Realm == (int)this.Realm)
+                    {
+                        if (rl.LastLoyaltyUpdate < DateTime.Now.AddDays(-1))
+                            rl.LoyalDays++;
+                        numCurrentLoyalDays = rl.LoyalDays;
+                        realmFound = true;
+                    }
+                    else
+                    {
+                        //reduce loyalty
+                        if (rl.LoyalDays < 2 || arguments.XPSource is eXPSource.Player)
+                        {
+                            rl.LoyalDays = 0;
+                        }
+                        else
+                        {
+                            rl.LoyalDays--;
+                            rl.LoyalDays--;
+                        }
+
+                        if (rl.LoyalDays < rl.MinimumLoyalDays)
+                            rl.LoyalDays = rl.MinimumLoyalDays;
+                    }
+
+                    rl.LastLoyaltyUpdate = DateTime.Now;
+                    GameServer.Database.SaveObject(rl);
+                }
+
+                if (realmFound == false)
+                {
+                    DbAccountXRealmLoyalty newLoyalty = new DbAccountXRealmLoyalty();
+                    newLoyalty.AccountId = this.Client.Account.ObjectId;
+                    newLoyalty.Realm = (int)this.Realm;
+                    newLoyalty.LoyalDays = 1;
+                    numCurrentLoyalDays = 1;
+                    newLoyalty.LastLoyaltyUpdate = DateTime.Now;
+                    GameServer.Database.AddObject(newLoyalty);
+                }
+
+                this.TempProperties.SetProperty(REALM_LOYALTY_KEY, DateTime.Now);
+                this.TempProperties.SetProperty(CURRENT_LOYALTY_KEY, numCurrentLoyalDays);
+            }
+
+            //if (arguments.XPSource is eXPSource.Player && !this.CurrentZone.IsBG)
+            //{
+            //    LoyaltyManager.HandlePVPKill(this);
+            //}
+
+            long baseXp = arguments.ExpBase;
+
+            if (arguments.AllowMultiply)
+            {
+                // Recalculate base experience.
+                expTotal -= baseXp;
+
+                if (Properties.ENABLE_ZONE_BONUSES)
+                {
+                    long zoneBonus = baseXp * ZoneBonus.GetXPBonus(this) / 100;
+
+                    if (zoneBonus > 0)
+                    {
+                        zoneBonus = (long)(zoneBonus * Properties.XP_RATE);
+                        //Out.SendMessage(ZoneBonus.GetBonusMessage(this, (int)zoneBonus, ZoneBonus.eZoneBonusType.XP), eChatType.CT_Important, eChatLoc.CL_SystemWindow);
+                        GainExperience(new(zoneBonus, 0, 0, 0, 0, 0, false, false, eXPSource.Other), false);
+                    }
+                }
+
+                if (CurrentRegion.IsRvR || CurrentZone.IsRvR)
+                    baseXp = (long)(baseXp * Properties.RvR_XP_RATE);
+                else
+                    baseXp = (long)(baseXp * Properties.XP_RATE);
+
+                long xpBonus = GetModified(eProperty.XpPoints);
+
+                if (xpBonus != 0)
+                    baseXp += baseXp * xpBonus / 100;
+
+                expTotal += baseXp;
             }
 
             // Get Champion Experience too
             // GainChampionExperience(expTotal);
-
-            #region Guild XP Bonus
-
-            //long guildBonus = 0;
-            //if (Guild != null && !Guild.IsStartingGuild && Guild.BonusType == Guild.eBonusType.Experience && xpSource == eXPSource.NPC)
-            //{
-            //    guildBonus = (long)Math.Ceiling((double)expTotal * ServerProperties.Properties.GUILD_BUFF_XP / 100);
-            //}
-            //else if (Guild != null && Guild.IsStartingGuild && xpSource == eXPSource.NPC)
-            //{
-            //    guildBonus = (long)Math.Ceiling((double)expTotal * ServerProperties.Properties.GUILD_BUFF_XP / 200);
-            //}
-
-            //expTotal += guildBonus;
-
-            #endregion Guild XP Bonus
-
-            //Commenting base.GainExperience out as it was used to Notify which was only used by GuildEvent (which is now moved here)
-            //base.GainExperience(xpSource, expTotal, expCampBonus, expGroupBonus, expOutpostBonus, atlasBonus, sendMessage, allowMultiply, notify);
 
             if (IsLevelSecondStage)
             {
@@ -5442,27 +5420,60 @@ namespace DOL.GS.Scripts
                 expTotal = ExperienceForCurrentLevel - Experience;
             }
 
-            int relicBonus = (int)(baseXp * (0.05 * RelicMgr.GetRelicCount(Realm)));
-            if (relicBonus > 0) expTotal += relicBonus;
+            if (arguments.SendMessage && expTotal > 0)
+            {
+                System.Globalization.NumberFormatInfo format = System.Globalization.NumberFormatInfo.InvariantInfo;
+                string totalExpStr = expTotal.ToString("N0", format);
+                string expCampBonusStr = string.Empty;
+                string expGroupBonusStr = string.Empty;
+                string expGuildBonusStr = string.Empty;
+                string expBafBonusStr = string.Empty;
+                string expOutpostBonusStr = string.Empty;
+
+                if (arguments.ExpCampBonus > 0)
+                    expCampBonusStr = LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.GainExperience.CampBonus", arguments.ExpCampBonus.ToString("N0", format)) + " ";
+
+                if (arguments.ExpGroupBonus > 0)
+                    expGroupBonusStr = LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.GainExperience.GroupBonus", arguments.ExpGroupBonus.ToString("N0", format)) + " ";
+
+                if (arguments.ExpGuildBonus > 0)
+                    expGuildBonusStr = "(" + arguments.ExpGuildBonus.ToString("N0", format) + " guild bonus) ";
+
+                if (arguments.ExpBafBonus > 0)
+                    expBafBonusStr = "(" + arguments.ExpBafBonus.ToString("N0", format) + " baf bonus) ";
+
+                if (arguments.ExpOutpostBonus > 0)
+                    expOutpostBonusStr = LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.GainExperience.OutpostBonus", arguments.ExpOutpostBonus.ToString("N0", format)) + " ";
+
+                string message = LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.GainExperience.YouGet", totalExpStr) + " " + expCampBonusStr + expGroupBonusStr + expGuildBonusStr + expBafBonusStr + expOutpostBonusStr;
+                Out.SendMessage(message, eChatType.CT_Important, eChatLoc.CL_SystemWindow);
+            }
 
             Experience += expTotal;
 
             if (expTotal >= 0)
             {
                 //Level up
-                if (Level >= 40 && Level < MaxLevel && !IsLevelSecondStage && Experience >= ExperienceForCurrentLevelSecondStage)
+                if (Level >= 5 && !CharacterClass.HasAdvancedFromBaseClass())
+                {
+                    if (expTotal > 0)
+                    {
+                        Out.SendMessage(LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.GainExperience.CannotRaise"), eChatType.CT_Important, eChatLoc.CL_SystemWindow);
+                        Out.SendMessage(LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.GainExperience.TalkToTrainer"), eChatType.CT_Important, eChatLoc.CL_SystemWindow);
+                    }
+                }
+                else if (Level >= 40 && Level < MaxLevel && !IsLevelSecondStage && Experience >= ExperienceForCurrentLevelSecondStage)
                 {
                     OnLevelSecondStage();
-                    m_isLevelSecondStage = true;
+                    Notify(GamePlayerEvent.LevelSecondStage, this);
                 }
                 else if (Level < MaxLevel && Experience >= ExperienceForNextLevel)
                 {
-                    log.Info("level up for " + Name);
                     Level++;
                 }
             }
 
-            //Out.SendUpdatePoints();
+            Out.SendUpdatePoints();
         }
 
         /// <summary>
@@ -5584,7 +5595,7 @@ namespace DOL.GS.Scripts
             //CharacterClass.OnLevelUp(this, previouslevel);
             RefreshSpecDependantSkills(false);
 
-            if (CharacterClass.ClassType == eClassType.ListCaster || CharacterClass.ID == (int)eCharacterClass.Valewalker)
+            if (CharacterClass.ClassType == eClassType.ListCaster)
                 SetCasterSpells();
             else
                 SetSpells();
@@ -5743,46 +5754,16 @@ namespace DOL.GS.Scripts
 
         #region Combat
 
-        /// <summary>
-        /// Calculate how fast this player can cast a given spell
-        /// </summary>
-        /// <param name="spell"></param>
-        /// <returns></returns>
         public override int CalculateCastingTime(SpellLine line, Spell spell)
         {
-            int ticks = spell.CastTime;
+            int castTime;
 
-            if (spell.InstrumentRequirement != 0 ||
-                line.KeyName == GlobalSpellsLines.Item_Spells ||
-                line.KeyName.StartsWith(GlobalSpellsLines.Champion_Lines_StartWith))
-            {
-                return ticks;
-            }
+            if (!CharacterClass.CanChangeCastingSpeed(line, spell))
+                castTime = spell.CastTime;
+            else
+                castTime = base.CalculateCastingTime(line, spell);
 
-            if (CharacterClass.CanChangeCastingSpeed(line, spell) == false)
-                return ticks;
-
-            if (EffectListService.GetAbilityEffectOnTarget(this, eEffect.QuickCast) != null)
-            {
-                // Most casters have access to the Quickcast ability (or the Necromancer equivalent, Facilitate Painworking).
-                // This ability will allow you to cast a spell without interruption.
-                // http://support.darkageofcamelot.com/kb/article.php?id=022
-
-                // A: You're right. The answer I should have given was that Quick Cast reduces the time needed to cast to a flat two seconds,
-                // and that a spell that has been quick casted cannot be interrupted. ...
-                // http://www.camelotherald.com/news/news_article.php?storyid=1383
-
-                return 2000;
-            }
-
-            double percent = DexterityCastTimeReduction;
-            percent *= 1.0 - GetModified(eProperty.CastingSpeed) * 0.01;
-
-            ticks = (int)(ticks * Math.Max(CastingSpeedReductionCap, percent));
-            if (ticks < MinimumCastingSpeed)
-                ticks = MinimumCastingSpeed;
-
-            return ticks;
+            return castTime;
         }
 
         /// <summary>
@@ -5902,7 +5883,7 @@ namespace DOL.GS.Scripts
                 if (spell.InstrumentRequirement != 0)
                 {
                     Out.SendMessage(LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.SwitchWeapon.SpellCancelled"), eChatType.CT_SpellResisted, eChatLoc.CL_SystemWindow);
-                    EffectService.RequestImmediateCancelEffect(EffectListService.GetPulseEffectOnTarget(this, spell));
+                    EffectService.RequestImmediateCancelConcEffect(EffectListService.GetPulseEffectOnTarget(this, spell));
                 }
             }
 
@@ -5954,9 +5935,7 @@ namespace DOL.GS.Scripts
             }
 
             if (ObjectState == eObjectState.Active)
-            {
                 UpdateEquipmentAppearance();
-            }
         }
 
         /// <summary>
@@ -6481,38 +6460,33 @@ namespace DOL.GS.Scripts
         /// <summary>
         /// calculate item armor factor influenced by quality, con and duration
         /// </summary>
-        /// <param name="slot"></param>
-        /// <returns></returns>
         public override double GetArmorAF(eArmorSlot slot)
         {
-            if (slot == eArmorSlot.NOTSET) return 0;
+            if (slot is eArmorSlot.NOTSET)
+                return 0;
+
             DbInventoryItem item = Inventory.GetItem((eInventorySlot)slot);
-            if (item == null) return 0;
-            double eaf = item.DPS_AF + BaseBuffBonusCategory[(int)eProperty.ArmorFactor]; // base AF buff
 
-            int itemAFcap = Level;
+            if (item == null)
+                return 0;
+
+            int characterLevel = Level;
+
             if (RealmLevel > 39)
-                itemAFcap++;
-            if (item.Object_Type != (int)eObjectType.Cloth)
-            {
-                itemAFcap <<= 1;
-            }
+                characterLevel++;
 
-            eaf = Math.Min(eaf, itemAFcap);
-            //eaf *= 4.67; // compensate *4.67 in damage formula
-
-            // my test shows that qual is added after AF buff
-            eaf *= item.Quality * 0.01 * item.Condition / item.MaxCondition;
-
-            eaf += GetModified(eProperty.ArmorFactor);
-            //eaf *= 4.67; // compensate *4.67 in damage formula
+            int armorFactorCap = characterLevel * 2;
+            double armorFactor = Math.Min(item.DPS_AF, (eObjectType)item.Object_Type is eObjectType.Cloth ? characterLevel : armorFactorCap);
+            armorFactor += BaseBuffBonusCategory[(int)eProperty.ArmorFactor] / 6.0; // Base AF buff.
+            armorFactor *= item.Quality * 0.01 * item.Condition / item.MaxCondition; // Apply condition and quality before the second cap. Maybe incorrect, but it makes base AF buffs a little more useful.
+            armorFactor = Math.Min(armorFactor, armorFactorCap);
+            armorFactor += base.GetArmorAF(slot);
 
             /*GameSpellEffect effect = SpellHandler.FindEffectOnTarget(this, typeof(VampiirArmorDebuff));
             if (effect != null && slot == (effect.SpellHandler as VampiirArmorDebuff).Slot)
-            {
-                eaf -= (int)(effect.SpellHandler as VampiirArmorDebuff).Spell.Value;
-            }*/
-            return eaf;
+                armorFactor -= (int) (effect.SpellHandler as VampiirArmorDebuff).Spell.Value;*/
+
+            return armorFactor;
         }
 
         /// <summary>
@@ -6581,7 +6555,7 @@ namespace DOL.GS.Scripts
             return Dps * 0.1;
         }
 
-        public double ApplyWeaponQualityAndConditionToDamage(DbInventoryItem weapon, double damage)
+        public static double ApplyWeaponQualityAndConditionToDamage(DbInventoryItem weapon, double damage)
         {
             return damage * weapon.Quality * 0.01 * weapon.Condition / weapon.MaxCondition;
         }
@@ -6962,7 +6936,7 @@ namespace DOL.GS.Scripts
             //        DeathCount++;
             //        m_deathtype = eDeathType.PvE;
             //        long xpLoss = (ExperienceForNextLevel - ExperienceForCurrentLevel) * xpLossPercent / 1000;
-            //        GainExperience(eXPSource.Other, -xpLoss, 0, 0, 0, false, true);
+            //        GainExperience(new(-xpLoss, 0, 0, 0, 0, 0, false, true, eXPSource.Other));
             //        //TempProperties.SetProperty(DEATH_EXP_LOSS_PROPERTY, xpLoss);
             //    }
 
@@ -7266,7 +7240,7 @@ namespace DOL.GS.Scripts
         // UncoverStealthAction is what unstealths player if they are too close to mobs.
         public void StartStealthUncoverAction()
         {
-            MimicUncoverStealthAction action = TempProperties.GetProperty<MimicUncoverStealthAction>(UNCOVER_STEALTH_ACTION_PROP, null);
+            MimicUncoverStealthAction action = TempProperties.GetProperty<MimicUncoverStealthAction>(UNCOVER_STEALTH_ACTION_PROP);
             //start the uncover timer
             if (action == null)
                 action = new MimicUncoverStealthAction(this);
@@ -7279,7 +7253,7 @@ namespace DOL.GS.Scripts
         // UncoverStealthAction is what unstealths player if they are too close to mobs.
         public void StopStealthUncoverAction()
         {
-            MimicUncoverStealthAction action = TempProperties.GetProperty<MimicUncoverStealthAction>(UNCOVER_STEALTH_ACTION_PROP, null);
+            MimicUncoverStealthAction action = TempProperties.GetProperty<MimicUncoverStealthAction>(UNCOVER_STEALTH_ACTION_PROP);
             //stop the uncover timer
             if (action != null)
             {
@@ -7364,7 +7338,6 @@ namespace DOL.GS.Scripts
                         chanceMod = 1f - (distanceToPlayer - 125.0) / (detectRadius - 125.0);
 
                     double chanceToUncover = 0.1 + (npc.Level - stealthLevel) * 0.01 * chanceMod;
-                    if (chanceToUncover < 0.01) chanceToUncover = 0.01;
 
                     if (Util.ChanceDouble(chanceToUncover))
                     {
@@ -7625,7 +7598,7 @@ namespace DOL.GS.Scripts
         /// </summary>
         public string ItemBonusName(int BonusType)
         {
-            string BonusName = "";
+            string BonusName = string.Empty;
 
             if (BonusType == 1) BonusName = LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.ItemBonusName.Bonus1");//Strength
             if (BonusType == 2) BonusName = LanguageMgr.GetTranslation(Client.Account.Language, "GamePlayer.ItemBonusName.Bonus2");//Dexterity
@@ -7815,33 +7788,59 @@ namespace DOL.GS.Scripts
                 }
             }*/
 
-            if (ObjectState == eObjectState.Active)
+            _statsSenderOnEquipmentChange ??= new(this, OnStatsSendCompletionAfterEquipmentChange);
+        }
+
+        private StatsSenderOnEquipmentChange _statsSenderOnEquipmentChange;
+
+        private int OnStatsSendCompletionAfterEquipmentChange()
+        {
+            _statsSenderOnEquipmentChange = null;
+            return 0; // Must return 0 to stop the timer. This is just to make `OnTick` cleaner.
+        }
+
+        public class StatsSenderOnEquipmentChange : ECSGameTimerWrapperBase
+        {
+            private new MimicNPC Owner { get; }
+            private Func<int> _onCompletion;
+
+            public StatsSenderOnEquipmentChange(GameObject owner, Func<int> OnCompletion) : base(owner)
             {
-                //Out.SendCharStatsUpdate();
-                //Out.SendCharResistsUpdate();
-                //Out.SendUpdateWeaponAndArmorStats();
-                //Out.SendUpdateMaxSpeed();
-                //Out.SendEncumberance();
-                //Out.SendUpdatePlayerSkills();
-                //UpdatePlayerStatus();
+                Owner = owner as MimicNPC;
+                _onCompletion = OnCompletion;
+                Start(0);
+            }
 
-                if (IsAlive)
-                {
-                    if (Health < MaxHealth)
-                        StartHealthRegeneration();
-                    else if (Health > MaxHealth)
-                        Health = MaxHealth;
+            protected override int OnTick(ECSGameTimer timer)
+            {
+                if (Owner.ObjectState is not eObjectState.Active)
+                    return _onCompletion();
 
-                    if (Mana < MaxMana)
-                        StartPowerRegeneration();
-                    else if (Mana > MaxMana)
-                        Mana = MaxMana;
+                if (!IsAlive)
+                    return _onCompletion();
 
-                    if (Endurance < MaxEndurance)
-                        StartEnduranceRegeneration();
-                    else if (Endurance > MaxEndurance)
-                        Endurance = MaxEndurance;
-                }
+                int maxHealth = Owner.MaxHealth;
+
+                if (Owner.Health < maxHealth)
+                    Owner.StartHealthRegeneration();
+                else if (Owner.Health > maxHealth)
+                    Owner.Health = maxHealth;
+
+                int maxMana = Owner.MaxMana;
+
+                if (Owner.Mana < maxMana)
+                    Owner.StartPowerRegeneration();
+                else if (Owner.Mana > maxMana)
+                    Owner.Mana = maxMana;
+
+                int maxEndurance = Owner.MaxEndurance;
+
+                if (Owner.Endurance < maxEndurance)
+                    Owner.StartEnduranceRegeneration();
+                else if (Owner.Endurance > maxEndurance)
+                    Owner.Endurance = maxEndurance;
+
+                return _onCompletion();
             }
         }
 
@@ -8053,7 +8052,7 @@ namespace DOL.GS.Scripts
         public virtual void RefreshItemBonuses()
         {
             m_itemBonus = new PropertyIndexer();
-            string slotToLoad = "";
+            string slotToLoad = string.Empty;
             switch (VisibleActiveWeaponSlots)
             {
                 case 16: slotToLoad = "rightandleftHandSlot"; break;
@@ -8074,7 +8073,7 @@ namespace DOL.GS.Scripts
 
                 // skip weapons. only active weapons should fire equip event, done in player.SwitchWeapon
                 bool add = true;
-                if (slotToLoad != "")
+                if (slotToLoad != string.Empty)
                 {
                     switch (item.SlotPosition)
                     {
@@ -8182,12 +8181,14 @@ namespace DOL.GS.Scripts
 
             ItemBonus[bonusType] += bonusAmount;
 
-            if (ObjectState == eObjectState.Active)
+            if (ObjectState is eObjectState.Active)
             {
                 //Out.SendCharStatsUpdate();
                 //Out.SendCharResistsUpdate();
                 //Out.SendUpdateWeaponAndArmorStats();
-                //Out.SendUpdatePlayerSkills();
+                //Out.SendUpdateMaxSpeed();
+                //Out.SendEncumberance();
+                // Out.SendUpdatePlayerSkills();
                 //UpdatePlayerStatus();
 
                 if (IsAlive)

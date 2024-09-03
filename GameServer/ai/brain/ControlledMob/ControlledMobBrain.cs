@@ -74,7 +74,6 @@ namespace DOL.AI.Brain
 			FSM.Add(new ControlledMobState_DEFENSIVE(this));
 			FSM.Add(new ControlledMobState_AGGRO(this));
 			FSM.Add(new ControlledMobState_PASSIVE(this));
-			FSM.Add(new StandardMobState_DEAD(this));
 			FSM.SetCurrentState(eFSMStateType.WAKING_UP);
 		}
 
@@ -391,35 +390,22 @@ namespace DOL.AI.Brain
             return true;
         }
 
-        /// <summary>
-        /// Stops the brain thinking
-        /// </summary>
-        /// <returns>true if stopped</returns>
-        public override bool Stop()
-        {
-            if (!base.Stop())
-                return false;
+		public override bool Stop()
+		{
+			if (!base.Stop())
+				return false;
 
-            StripCastedBuffs();
-            GameEventMgr.Notify(GameLivingEvent.PetReleased, Body);
-            return true;
-        }
+			OnRelease();
+			return true;
+		}
 
-        /// <summary>
-        /// Do the mob AI
-        /// </summary>
-        public override void Think()
-        {
-            base.Think();
-        }
-
-        /// <summary>
-        /// Checks the Abilities
-        /// </summary>
-        public override void CheckAbilities()
-        {
-            if (Body.Abilities == null || Body.Abilities.Count <= 0)
-                return;
+		/// <summary>
+		/// Checks the Abilities
+		/// </summary>
+		public override void CheckAbilities()
+		{
+			if (Body.Abilities == null || Body.Abilities.Count <= 0)
+				return;
 
 			foreach (Ability ab in Body.Abilities.Values)
 			{
@@ -512,7 +498,9 @@ namespace DOL.AI.Brain
                 case eSpellType.AFHitsBuff:
                 case eSpellType.AllMagicResistBuff:
                 case eSpellType.ArmorAbsorptionBuff:
-                case eSpellType.ArmorFactorBuff:
+                case eSpellType.BaseArmorFactorBuff:
+                case eSpellType.SpecArmorFactorBuff:
+                case eSpellType.PaladinArmorFactorBuff:
                 case eSpellType.BodyResistBuff:
                 case eSpellType.BodySpiritEnergyBuff:
                 case eSpellType.Buff:
@@ -540,7 +528,6 @@ namespace DOL.AI.Brain
                 case eSpellType.MeleeDamageBuff:
                 case eSpellType.MesmerizeDurationBuff:
                 case eSpellType.MLABSBuff:
-                case eSpellType.PaladinArmorFactorBuff:
                 case eSpellType.ParryBuff:
                 case eSpellType.PowerHealthEnduranceRegenBuff:
                 case eSpellType.PowerRegenBuff:
@@ -966,10 +953,21 @@ namespace DOL.AI.Brain
             AttackMostWanted();
         }
 
-        public void AddBuffedTarget(GameLiving living)
-        {
-            if (living == Body)
-                return;
+		public virtual void OnRelease()
+		{
+			StripCastedBuffs();
+
+			foreach (ECSGameSpellEffect effect in Body.effectListComponent.GetSpellEffects())
+			{
+				if (effect.EffectType is eEffect.Pet or eEffect.Charm)
+					EffectService.RequestImmediateCancelEffect(effect);
+			}
+		}
+
+		public void AddBuffedTarget(GameLiving living)
+		{
+			if (living == Body)
+				return;
 
             lock (m_buffedTargetsLock)
             {

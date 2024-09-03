@@ -53,7 +53,7 @@ namespace DOL.AI.Brain
                 _brain.Roam = true;
                 _brain.Defend = false;
 
-                _brain.Body.RoamingRange = 10000;
+                _brain.Body.RoamingRange = 100000;
 
                 //_brain.CheckDefensiveAbilities();
                 //_brain.Body.SortSpells();
@@ -110,41 +110,11 @@ namespace DOL.AI.Brain
 
         public override void Enter()
         {
-            if (ECS.Debug.Diagnostics.StateMachineDebugEnabled)
-                Console.WriteLine($"{_brain.Body} is entering IDLE");
-
             base.Enter();
         }
 
         public override void Think()
         {
-            //if (_brain.HasPatrolPath())
-            //{
-            //    _brain.FSM.SetCurrentState(eFSMStateType.PATROLLING);
-            //    return;
-            //}
-
-            //if (_brain.Body.CanRoam)
-            //{
-            //    _brain.FSM.SetCurrentState( eFSMStateType.ROAMING);
-            //    return;
-            //}
-
-            //if (_brain.IsBeyondTetherRange())
-            //{
-            //    _brain.FSM.SetCurrentState(eFSMStateType.RETURN_TO_SPAWN);
-            //    return;
-            //}
-
-            //if (!_brain.PreventCombat)
-            //{
-            //    if (_brain.CheckProximityAggro(_brain.AggroRange))
-            //    {
-            //        _brain.FSM.SetCurrentState(eFSMStateType.AGGRO);
-            //        return;
-            //    }
-            //}
-
             _brain.CheckSpells(MimicBrain.eCheckSpellType.Defensive);
 
             base.Think();
@@ -162,9 +132,6 @@ namespace DOL.AI.Brain
 
         public override void Enter()
         {
-            if (ECS.Debug.Diagnostics.StateMachineDebugEnabled)
-                Console.WriteLine($"{_brain.Body} is entering FOLLOW_THE_LEADER");
-
             if (_brain.Body.Group != null)
             {
                 leader = _brain.Body.Group.LivingLeader;
@@ -230,10 +197,9 @@ namespace DOL.AI.Brain
 
     public class MimicState_Aggro : MimicState
     {
-        private const int LEAVE_WHEN_OUT_OF_COMBAT_FOR = 10000;
-
-        private long _aggroTime = GameLoop.GameLoopTime; // Used to prevent leaving on the first think tick, due to `InCombatInLast` returning false.
-        private long _checkAggroTime = GameLoop.GameLoopTime + 5000;
+        private const int LEAVE_WHEN_OUT_OF_COMBAT_FOR = 6000;
+        private long _aggroEndTime;
+        private long _checkAggroTime;
 
         public MimicState_Aggro(MimicBrain brain) : base(brain)
         {
@@ -242,12 +208,10 @@ namespace DOL.AI.Brain
 
         public override void Enter()
         {
-            if (ECS.Debug.Diagnostics.StateMachineDebugEnabled)
-                Console.WriteLine($"{_brain.Body} is entering AGGRO");
-
             _brain.MimicBody.Sit(false);
 
-            _aggroTime = GameLoop.GameLoopTime;
+            _aggroEndTime = GameLoop.GameLoopTime + LEAVE_WHEN_OUT_OF_COMBAT_FOR;
+            _checkAggroTime = GameLoop.GameLoopTime;
 
             _brain.OnEnterAggro();
 
@@ -279,9 +243,10 @@ namespace DOL.AI.Brain
             {
                 _brain.CheckProximityAggro(_brain.AggroRange);
                 _checkAggroTime = GameLoop.GameLoopTime + 5000;
+                _aggroEndTime = GameLoop.GameLoopTime + LEAVE_WHEN_OUT_OF_COMBAT_FOR;
             }
 
-            if (!_brain.HasAggro || (!_brain.Body.InCombatInLast(LEAVE_WHEN_OUT_OF_COMBAT_FOR) && _aggroTime + LEAVE_WHEN_OUT_OF_COMBAT_FOR <= GameLoop.GameLoopTime))
+            if (!_brain.HasAggro || (!_brain.Body.InCombatInLast(LEAVE_WHEN_OUT_OF_COMBAT_FOR) && ServiceUtils.ShouldTick(_aggroEndTime)))
             {
                 if (!_brain.Body.IsMezzed && !_brain.Body.IsStunned)
                 {
@@ -354,9 +319,6 @@ namespace DOL.AI.Brain
 
         public override void Enter()
         {
-            if (ECS.Debug.Diagnostics.StateMachineDebugEnabled)
-                Console.WriteLine($"{_brain.Body} is entering ROAM");
-
             base.Enter();
         }
 
@@ -390,6 +352,7 @@ namespace DOL.AI.Brain
                     {
                         _nextRoamingTickSet = true;
                         _nextRoamingTick += Util.Random(MinCooldown, MaxCooldown) * 1000;
+                        _brain.Body.SpawnPoint = new Point3D(_brain.Body.X, _brain.Body.Y, _brain.Body.Z);
                     }
 
                     if (ServiceUtils.ShouldTickAdjust(ref _nextRoamingTick))
@@ -416,9 +379,6 @@ namespace DOL.AI.Brain
 
         public override void Enter()
         {
-            if (ECS.Debug.Diagnostics.StateMachineDebugEnabled)
-                Console.WriteLine($"{_brain.Body} is entering CAMP");
-
             if (_brain.Body.Group?.MimicGroup.CampPoint == null || !_brain.Body.IsWithinRadius(_brain.Body.Group?.MimicGroup.CampPoint, 1500))
             {
                 _brain.FSM.SetCurrentState(eFSMStateType.WAKING_UP);
@@ -484,8 +444,6 @@ namespace DOL.AI.Brain
 
         public override void Enter()
         {
-            if (ECS.Debug.Diagnostics.StateMachineDebugEnabled)
-                Console.WriteLine($"{_brain.Body} is entering RETURN_TO_SPAWN");
 
             if (_brain.Body.WasStealthed)
                 _brain.Body.Flags |= GameNPC.eFlags.STEALTH;
@@ -539,9 +497,6 @@ namespace DOL.AI.Brain
 
         public override void Enter()
         {
-            if (ECS.Debug.Diagnostics.StateMachineDebugEnabled)
-                Console.WriteLine($"{_brain.Body} is PATROLLING");
-
             _brain.Body.MoveOnPath(_brain.Body.MaxSpeed);
             _brain.ClearAggroList();
             base.Enter();
@@ -571,9 +526,6 @@ namespace DOL.AI.Brain
 
         public override void Enter()
         {
-            if (ECS.Debug.Diagnostics.StateMachineDebugEnabled)
-                Console.WriteLine($"{_brain.Body} has entered DUEL state");
-
             _brain.ClearAggroList();
 
             _brain.MimicBody.IsDuelReady = false;
@@ -611,9 +563,6 @@ namespace DOL.AI.Brain
 
         public override void Enter()
         {
-            if (ECS.Debug.Diagnostics.StateMachineDebugEnabled)
-                Console.WriteLine($"{_brain.Body} has entered DEAD state");
-
             _brain.ClearAggroList();
             base.Enter();
         }

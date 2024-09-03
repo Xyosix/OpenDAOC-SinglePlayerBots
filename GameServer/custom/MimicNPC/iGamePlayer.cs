@@ -43,7 +43,11 @@ namespace DOL.GS.Scripts
 
         public eArmorSlot CalculateArmorHitLocation(AttackData ad);
         public double WeaponDamageWithoutQualityAndCondition(DbInventoryItem weapon);
-        public double ApplyWeaponQualityAndConditionToDamage(DbInventoryItem weapon, double damage);
+
+        public static double ApplyWeaponQualityAndConditionToDamage(DbInventoryItem weapon, double damage)
+        {
+            return damage * weapon.Quality * 0.01 * weapon.Condition / weapon.MaxCondition;
+        }
 
         public void Stealth(bool goStealth);
         public void StartStealthUncoverAction();
@@ -145,10 +149,10 @@ namespace DOL.GS.Scripts
         public int Health { get; set; }
         public int MaxHealth { get; }
         public byte HealthPercent { get; }
+        
         public int Mana { get; set; }
         public int MaxMana { get; }
-
-        public int PowerRegenStackingBonus { get; set; }
+        public byte ManaPercent { get; }
 
         public int Endurance { get; set; }
         public short MaxSpeedBase { get; set; }

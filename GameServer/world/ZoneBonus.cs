@@ -24,6 +24,7 @@ using DOL.GS.PacketHandler;
 using log4net;
 using System.Reflection;
 using DOL.Language;
+using DOL.GS.Scripts;
 
 namespace DOL.GS
 {
@@ -41,19 +42,19 @@ namespace DOL.GS
         } 
         #endregion
         #region Get Bonuses Methods
-        public static int GetXPBonus(GamePlayer player)
+        public static int GetXPBonus(IGamePlayer player)
         {
             return player.CurrentZone.BonusExperience;
         }
-        public static int GetRPBonus(GamePlayer player)
+        public static int GetRPBonus(IGamePlayer player)
         {
             return player.CurrentZone.BonusRealmpoints;
         }
-        public static int GetBPBonus(GamePlayer player)
+        public static int GetBPBonus(IGamePlayer player)
         {
             return player.CurrentZone.BonusBountypoints;
         }
-        public static int GetCoinBonus(GamePlayer player)
+        public static int GetCoinBonus(IGamePlayer player)
         {
             return player.CurrentZone.BonusCoin;
         } 

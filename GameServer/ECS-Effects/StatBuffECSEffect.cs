@@ -5,134 +5,96 @@ namespace DOL.GS
 {
     public class StatBuffECSEffect : ECSGameSpellEffect
     {
-        public StatBuffECSEffect(ECSGameEffectInitParams initParams)
-            : base(initParams) { }
+        public StatBuffECSEffect(ECSGameEffectInitParams initParams) : base(initParams) { }
 
         public override void OnStartEffect()
         {
-            if (this.OwnerPlayer != null && OwnerPlayer.SelfBuffChargeIDs.Contains(this.SpellHandler.Spell.ID))
+            if (OwnerPlayer != null && OwnerPlayer.SelfBuffChargeIDs.Contains(SpellHandler.Spell.ID))
                 OwnerPlayer.ActiveBuffCharges++;
-            
-            if (EffectType == eEffect.StrengthConBuff || EffectType == eEffect.DexQuickBuff)
+
+            if (EffectType is eEffect.StrengthConBuff or eEffect.DexQuickBuff)
             {
                 foreach (var prop in EffectService.GetPropertiesFromEffect(EffectType))
-                {
-                    //Console.WriteLine($"Buffing {prop.ToString()}");
                     ApplyBonus(Owner, eBuffBonusCategory.SpecBuff, prop, SpellHandler.Spell.Value, Effectiveness, false);
-                }
             }
-            else if (SpellHandler.Spell.SpellType == eSpellType.ArmorFactorBuff)
-            {
+            else if (SpellHandler.Spell.SpellType is eSpellType.BaseArmorFactorBuff or eSpellType.SpecArmorFactorBuff or eSpellType.PaladinArmorFactorBuff)
                 ApplyBonus(Owner, (SpellHandler as ArmorFactorBuff).BonusCategory1, eProperty.ArmorFactor, SpellHandler.Spell.Value, Effectiveness, false);
-            }
-            else if (SpellHandler.Spell.SpellType == eSpellType.PaladinArmorFactorBuff)
-            {
-                ApplyBonus(Owner, (SpellHandler as PaladinArmorFactorBuff).BonusCategory1, eProperty.ArmorFactor, SpellHandler.Spell.Value, Effectiveness, false);
-            }
-            else if (SpellHandler.Spell.SpellType == eSpellType.AllMagicResistBuff)
+            else if (SpellHandler.Spell.SpellType is eSpellType.AllMagicResistBuff)
             {
                 foreach (var prop in EffectService.GetPropertiesFromEffect(EffectType))
-                {
                     ApplyBonus(Owner, eBuffBonusCategory.SpecBuff, prop, SpellHandler.Spell.Value, Effectiveness, false);
-                }
             }
             else
             {
                 foreach (var prop in EffectService.GetPropertiesFromEffect(EffectType))
                 {
-                    //Console.WriteLine($"Buffing {prop.ToString()}");
-                    if (EffectType == eEffect.EnduranceRegenBuff)
+                    if (EffectType is eEffect.EnduranceRegenBuff)
                         Effectiveness = 1;
 
-                    if (EffectType == eEffect.MovementSpeedBuff)
+                    if (EffectType is eEffect.MovementSpeedBuff)
                     {
-                        if (/*!Owner.InCombat && */!Owner.IsStealthed)
+                        if (!Owner.IsStealthed)
                         {
-                            //Console.WriteLine($"Value before: {Owner.BuffBonusMultCategory1.Get((int)eProperty.MaxSpeed)}");
-                            //e.Owner.BuffBonusMultCategory1.Set((int)eProperty.MaxSpeed, e.SpellHandler, e.SpellHandler.Spell.Value / 100.0);
-                            Owner.BuffBonusMultCategory1.Set((int)eProperty.MaxSpeed, EffectType, SpellHandler.Spell.Value / 100.0);
-                            //Console.WriteLine($"Value after: {Owner.BuffBonusMultCategory1.Get((int)eProperty.MaxSpeed)}");
+                            Owner.BuffBonusMultCategory1.Set((int) eProperty.MaxSpeed, EffectType, SpellHandler.Spell.Value / 100.0);
                             Owner.OnMaxSpeedChange();
                         }
+
                         if (Owner.IsStealthed)
-                        {
                             EffectService.RequestDisableEffect(this);
-                        }
                     }
                     else
                         ApplyBonus(Owner, eBuffBonusCategory.BaseBuff, prop, SpellHandler.Spell.Value, Effectiveness, false);
                 }
             }
-            
+
+            // Let's not bother checking the effect type and simply attempt to start every regeneration timer instead.
+            Owner.StartHealthRegeneration();
+            Owner.StartEnduranceRegeneration();
+            Owner.StartPowerRegeneration();
+
             // "You feel more dexterous!"
             // "{0} looks more agile!"
             OnEffectStartsMsg(Owner, true, true, true);
-
-            
-            //IsBuffActive = true;
         }
 
         public override void OnStopEffect()
         {
-            if (this.OwnerPlayer != null && OwnerPlayer.SelfBuffChargeIDs.Contains(this.SpellHandler.Spell.ID))
+            if (OwnerPlayer != null && OwnerPlayer.SelfBuffChargeIDs.Contains(SpellHandler.Spell.ID))
                 OwnerPlayer.ActiveBuffCharges--;
-            
-            if (EffectType == eEffect.StrengthConBuff || EffectType == eEffect.DexQuickBuff)
+
+            if (EffectType is eEffect.StrengthConBuff or eEffect.DexQuickBuff)
             {
                 foreach (var prop in EffectService.GetPropertiesFromEffect(EffectType))
-                {
-                    //Console.WriteLine($"Canceling {prop.ToString()}");
                     ApplyBonus(Owner, eBuffBonusCategory.SpecBuff, prop, SpellHandler.Spell.Value, Effectiveness, true);
-                }
             }
-            else if (SpellHandler.Spell.SpellType == eSpellType.ArmorFactorBuff)
-            {
+            else if (SpellHandler.Spell.SpellType is eSpellType.BaseArmorFactorBuff or eSpellType.SpecArmorFactorBuff or eSpellType.PaladinArmorFactorBuff)
                 ApplyBonus(Owner, (SpellHandler as ArmorFactorBuff).BonusCategory1, eProperty.ArmorFactor, SpellHandler.Spell.Value, Effectiveness, true);
-            }
-            else if (SpellHandler.Spell.SpellType == eSpellType.PaladinArmorFactorBuff)
-            {
-                ApplyBonus(Owner, (SpellHandler as PaladinArmorFactorBuff).BonusCategory1, eProperty.ArmorFactor, SpellHandler.Spell.Value, Effectiveness, true);
-            }
-            else if (SpellHandler.Spell.SpellType == eSpellType.AllMagicResistBuff)
+            else if (SpellHandler.Spell.SpellType is eSpellType.AllMagicResistBuff)
             {
                 foreach (var prop in EffectService.GetPropertiesFromEffect(EffectType))
-                {
                     ApplyBonus(Owner, eBuffBonusCategory.SpecBuff, prop, SpellHandler.Spell.Value, Effectiveness, true);
-                }
             }
             else
             {
-                if (EffectType == eEffect.EnduranceRegenBuff)
+                if (EffectType is eEffect.EnduranceRegenBuff)
                     Effectiveness = 1;
 
                 foreach (var prop in EffectService.GetPropertiesFromEffect(EffectType))
                 {
-                    //Console.WriteLine($"Canceling {prop.ToString()}");
-
-
-                    if (EffectType == eEffect.MovementSpeedBuff)
+                    if (EffectType is eEffect.MovementSpeedBuff)
                     {
-                        //if (Owner.BuffBonusMultCategory1.Get((int)eProperty.MaxSpeed) == SpellHandler.Spell.Value / 100 || Owner.InCombat)
-                        //{
-                            //Console.WriteLine($"Value before: {Owner.BuffBonusMultCategory1.Get((int)eProperty.MaxSpeed)}");
-                            //e.Owner.BuffBonusMultCategory1.Remove((int)eProperty.MaxSpeed, e.SpellHandler);
-                            Owner.BuffBonusMultCategory1.Remove((int)eProperty.MaxSpeed, EffectType);
-                            //Console.WriteLine($"Value after: {Owner.BuffBonusMultCategory1.Get((int)eProperty.MaxSpeed)}");
-                            Owner.OnMaxSpeedChange();
-                        //}
+                        Owner.BuffBonusMultCategory1.Remove((int)eProperty.MaxSpeed, EffectType);
+                        Owner.OnMaxSpeedChange();
                     }
-                    
+
                     else
                         ApplyBonus(Owner, eBuffBonusCategory.BaseBuff, prop, SpellHandler.Spell.Value, Effectiveness, true);
-
                 }
             }
-            
+
             // "Your agility returns to normal."
             // "{0} loses their graceful edge.""
             OnEffectExpiresMsg(Owner, true, false, true);
-
-
             IsBuffActive = false;
         }
 

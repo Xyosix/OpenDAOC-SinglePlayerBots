@@ -1,4 +1,6 @@
-﻿namespace DOL.GS
+﻿using DOL.GS.Spells;
+
+namespace DOL.GS
 {
     public class PetECSGameEffect : ECSGameSpellEffect
     {
@@ -6,9 +8,10 @@
 
         public override void OnStopEffect()
         {
-            Caster.UpdatePetCount(false);
-            Owner.Health = 0; // to send proper remove packet
+            SpellHandler.Caster.UpdatePetCount(false);
+            Owner.Health = 0; // To send proper remove packet.
             Owner.Delete();
+            (SpellHandler as SummonSpellHandler)?.OnPetReleased(Owner as GameSummonedPet);
         }
     }
 }

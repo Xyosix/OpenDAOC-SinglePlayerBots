@@ -4,6 +4,7 @@ using System.Text;
 using DOL.AI.Brain;
 using DOL.Database;
 using DOL.Events;
+using DOL.GS.Effects;
 using DOL.GS.PacketHandler;
 using DOL.GS.Scripts;
 
@@ -282,7 +283,7 @@ namespace DOL.GS
 
             living.Group = null;
             living.GroupIndex = 0xFF;
-            GamePlayer player = living as GamePlayer;
+            IGamePlayer player = living as IGamePlayer;
 
             // Update Player.
             if (player != null)
@@ -290,7 +291,7 @@ namespace DOL.GS
                 player.Out.SendGroupWindowUpdate();
                 player.Out.SendQuestListUpdate();
 
-                List<ECSGameAbilityEffect> abilityEffects = player.effectListComponent.GetAbilityEffects();
+                List<ECSGameAbilityEffect> abilityEffects = player.EffectListComponent.GetAbilityEffects();
 
                 // Cancel ability effects.
                 foreach (ECSGameAbilityEffect abilityEffect in abilityEffects)
@@ -343,7 +344,7 @@ namespace DOL.GS
                     // Update how the removed player sees their pet and themself.
                     if (controlledBrain != null)
                     {
-                        SendControlledBodyGuildID(player, playerGuild, controlledBrain.Body);
+                        SendControlledBodyGuildID((GamePlayer)player, playerGuild, controlledBrain.Body);
                         updateOneself = true;
                     }
 
@@ -363,14 +364,14 @@ namespace DOL.GS
                             // Update how the removed player sees the group member's pet and themself.
                             if (groupMemberControlledBrain != null)
                             {
-                                SendControlledBodyGuildID(player, groupMember.Guild, groupMemberControlledBrain.Body);
+                                SendControlledBodyGuildID((GamePlayer)player, groupMember.Guild, groupMemberControlledBrain.Body);
                                 updateOneself = true;
                             }
                         }
                     }
 
                     if (updateOneself)
-                        player.Out.SendObjectGuildID(player, playerGuild ?? Guild.DummyGuild);
+                        player.Out.SendObjectGuildID((GamePlayer)player, playerGuild ?? Guild.DummyGuild);
                 }
 
                 player.Out.SendMessage("You leave your group.", eChatType.CT_System, eChatLoc.CL_SystemWindow);
@@ -403,6 +404,12 @@ namespace DOL.GS
                 //	// Set aother Living Leader.
                 //	LivingLeader = m_groupMembers.First();
                 //}
+            }
+
+            if (player is MimicNPC mimic)
+            {
+                mimic.StopCurrentSpellcast();
+                mimic.CancelAllConcentrationEffects();
             }
 
             UpdateGroupIndexes();
@@ -651,52 +658,52 @@ namespace DOL.GS
 
         #endregion utils
 
-        /// <summary>
-        ///  This is NOT to be used outside of Battelgroup code.
-        /// </summary>
-        /// <param name="player">Input from battlegroups</param>
-        /// <returns>A string of group members</returns>
-        public string GroupMemberString(GamePlayer player)
-        {
-            lock (m_groupMembers)
-            {
-                StringBuilder text = new StringBuilder(64); //create the string builder
-                text.Length = 0;
-                BattleGroup mybattlegroup = player.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY, null);
-                foreach (GamePlayer plr in m_groupMembers)
-                {
-                    if (mybattlegroup.IsInTheBattleGroup(plr))
-                    {
-                        if ((bool)mybattlegroup.Members[plr] == true)
-                        {
-                            text.Append("<Leader> ");
-                        }
-                        text.Append("(I)");
-                    }
-                    text.Append(plr.Name + " ");
-                }
-                return text.ToString();
-            }
-        }
+		/// <summary>
+		///  This is NOT to be used outside of Battelgroup code.
+		/// </summary>
+		/// <param name="player">Input from battlegroups</param>
+		/// <returns>A string of group members</returns>
+		public string GroupMemberString(GamePlayer player)
+		{
+			lock (m_groupMembers)
+			{
+				StringBuilder text = new StringBuilder(64); //create the string builder
+				text.Length = 0;
+				BattleGroup mybattlegroup = player.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY);
+				foreach (GamePlayer plr in m_groupMembers)
+				{
+					if (mybattlegroup.IsInTheBattleGroup(plr))
+					{
+						if ((bool)mybattlegroup.Members[plr] == true)
+						{
+							text.Append("<Leader> ");
+						}
+						text.Append("(I)");
+					}
+					text.Append(plr.Name + " ");
+				}
+				return text.ToString();
+			}
+		}
 
-        /// <summary>
-        ///  This is NOT to be used outside of Battelgroup code.
-        /// </summary>
-        /// <param name="player">Input from battlegroups</param>
-        /// <returns>A string of group members</returns>
-        public string GroupMemberClassString(GamePlayer player)
-        {
-            lock (m_groupMembers)
-            {
-                StringBuilder text = new StringBuilder(64); //create the string builder
-                text.Length = 0;
-                BattleGroup mybattlegroup = player.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY, null);
-                foreach (GamePlayer plr in m_groupMembers)
-                {
-                    text.Append($"{plr.Name} ({plr.CharacterClass.Name}) ");
-                }
-                return text.ToString();
-            }
-        }
-    }
+		/// <summary>
+		///  This is NOT to be used outside of Battelgroup code.
+		/// </summary>
+		/// <param name="player">Input from battlegroups</param>
+		/// <returns>A string of group members</returns>
+		public string GroupMemberClassString(GamePlayer player)
+		{
+			lock (m_groupMembers)
+			{
+				StringBuilder text = new StringBuilder(64); //create the string builder
+				text.Length = 0;
+				BattleGroup mybattlegroup = player.TempProperties.GetProperty<BattleGroup>(BattleGroup.BATTLEGROUP_PROPERTY);
+				foreach (GamePlayer plr in m_groupMembers)
+				{
+					text.Append($"{plr.Name} ({plr.CharacterClass.Name}) ");
+				}
+				return text.ToString();
+			}
+		}
+	}
 }

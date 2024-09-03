@@ -97,7 +97,7 @@ namespace DOL.GS
 			m_id = 0;
 			m_name = "Unknown Class";
 			m_basename = "Unknown Base Class";
-			m_profession = "";
+			m_profession = string.Empty;
 
 			// initialize members from attributes
 			Attribute[] attrs = Attribute.GetCustomAttributes(this.GetType(), typeof(CharacterClassAttribute));
@@ -233,6 +233,8 @@ namespace DOL.GS
 			get { return eClassType.ListCaster; }
 		}
 
+		public virtual bool FocusCaster => false;
+
 		/// <summary>
 		/// Return the base list of Realm abilities that the class
 		/// can train in.  Added by Echostorm for RAs
@@ -336,19 +338,15 @@ namespace DOL.GS
 		/// </summary>
 		public virtual void CommandNpcRelease()
 		{
-			IControlledBrain controlledBrain = ((IGamePlayer)Player).ControlledBrain;
+			ControlledMobBrain controlledBrain;
 
-			if (controlledBrain == null)
-				return;
+			if (Player.TargetObject is not GameNPC targetNpc || !Player.IsControlledNPC(targetNpc))
+				controlledBrain = Player.ControlledBrain as ControlledMobBrain;
+			else
+				controlledBrain = targetNpc.Brain as ControlledMobBrain;
 
-			(controlledBrain as ControlledMobBrain)?.StripCastedBuffs();
-
-			GameNPC npc = controlledBrain.Body;
-
-			if (npc == null)
-				return;
-
-			Player.Notify(GameLivingEvent.PetReleased, npc);
+			controlledBrain?.OnRelease();
+			return;
 		}
 
 		/// <summary>
@@ -365,7 +363,6 @@ namespace DOL.GS
 		{
 			return true;
 		}
-
 
 		/// <summary>
 		/// Return the health percent of this character
