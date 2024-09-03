@@ -1,3 +1,5 @@
+Note: Now requires the latest OpenDAoC Database https://github.com/OpenDAoC/OpenDAoC-Database or running the commands found in https://github.com/OpenDAoC/OpenDAoC-Database/commit/c6153398bf65faa61b665b6b4cae68b5fa8c0862 for AF buffs to work correctly.
+
 This fork focuses on having bots that are treated as players as far as having player classes, give and take damage as players do, have player abilities, player specs, and can be grouped with for PvE or in RvR. RvR currently only includes Thidranki as far as automated spawning and grouping. As this is still being tested, some commands are available to players that normally shouldn't be.
 
 Everything is currently very command based. Bracketed commands are required, parenthesis commands are optional.
@@ -17,7 +19,9 @@ Everything is currently very command based. Bracketed commands are required, par
    - Puller - Only avaible for classes that can use a bow/crossbow currentely. The puller will run pull mobs to the point set with /mcamp set.
    - Tank - Will only use taunt styles and defensive styles. Ensures every mob is attacking themselves.
    - CC - Will attempt to CC any adds from the puller.
-   
+
+/mguard [target name] - If the mimic is in your group and has the Guard ability they will guard the target given. Mimics can also be told to guard the player in the right-click interact menu.
+
 /msummon - Summons your group to you. Used to summon your group if you zone into a dungeon or teleport somewhere.
 
 For PvE: 
