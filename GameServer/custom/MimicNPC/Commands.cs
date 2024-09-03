@@ -111,6 +111,7 @@ namespace DOL.GS.Scripts
 
                     switch (args[1])
                     {
+                        case "alb":
                         case "albion":
                         {
                             for (int i = 0; i < groupSize; i++)
@@ -131,6 +132,7 @@ namespace DOL.GS.Scripts
                             break;
                         }
 
+                        case "hib":
                         case "hibernia":
                         {
                             for (int i = 0; i < groupSize; i++)
@@ -151,6 +153,7 @@ namespace DOL.GS.Scripts
                             break;
                         }
 
+                        case "mid":
                         case "midgard":
                         {
                             for (int i = 0; i < groupSize; i++)
@@ -236,9 +239,10 @@ namespace DOL.GS.Scripts
                 }
                 else if (client.Player.Group != null)
                 {
-                    foreach (MimicNPC mimicNPC in client.Player.Group.GetMembersInTheGroup())
+                    foreach (GameLiving groupMember in client.Player.Group.GetMembersInTheGroup())
                     {
-                        mimicNPC.MimicBrain.PvPMode = toggle;
+                        if (groupMember is MimicNPC mimicNPC)
+                            mimicNPC.MimicBrain.PvPMode = toggle;
                     }
 
                     message = "PvP mode for your grouped mimics is " + toggle;
@@ -284,12 +288,12 @@ namespace DOL.GS.Scripts
                 {
                     if (mimic.Group != null)
                     {
-                        foreach (GameLiving living in mimic.Group.GetMembersInTheGroup())
+                        foreach (GameLiving groupMember in mimic.Group.GetMembersInTheGroup())
                         {
-                            if (living is MimicNPC mimicMember)
+                            if (groupMember is MimicNPC mimicNPC)
                             {
-                                mimicMember.MimicBrain.PreventCombat = toggle;
-                                message = "PreventCombat for " + mimicMember.Name + " is " + toggle;
+                                mimicNPC.MimicBrain.PreventCombat = toggle;
+                                message = "PreventCombat for " + mimicNPC.Name + " is " + toggle;
                             }
                         }
                     }
@@ -301,9 +305,10 @@ namespace DOL.GS.Scripts
                 }
                 else if (client.Player.Group != null)
                 {
-                    foreach (MimicNPC mimicNPC in client.Player.Group.GetMembersInTheGroup())
+                    foreach (GameLiving groupMember in client.Player.Group.GetMembersInTheGroup())
                     {
-                        mimicNPC.MimicBrain.PreventCombat = toggle;
+                        if (groupMember is MimicNPC mimicNPC)
+                            mimicNPC.MimicBrain.PreventCombat = toggle;
                     }
 
                     message = "PreventCombat for your grouped mimics is " + toggle;
@@ -356,8 +361,11 @@ namespace DOL.GS.Scripts
 
             foreach (GameLiving groupMember in client.Player.Group.GetMembersInTheGroup())
             {
-                if (groupMember != client.Player)
-                    groupMember.MoveTo(client.Player.CurrentRegionID, client.Player.X, client.Player.Y, client.Player.Z, client.Player.Heading);
+                if (groupMember is MimicNPC mimicNPC)
+                {
+                    mimicNPC.MoveTo(client.Player.CurrentRegionID, client.Player.X, client.Player.Y, client.Player.Z, client.Player.Heading);
+                    mimicNPC.MimicBrain.FSM.SetCurrentState(eFSMStateType.WAKING_UP);
+                }
             }
         }
     }

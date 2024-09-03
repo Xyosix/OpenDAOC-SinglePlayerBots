@@ -49,7 +49,7 @@ namespace DOL.AI.Brain
                 _brain.AggroLevel = 100;
                 _brain.AggroRange = 3600;
 
-                _brain.PvPMode = true;
+                _brain.PvPMode = _brain.Body.CurrentRegion.IsRvR || _brain.Body.CurrentZone.IsRvR;
                 _brain.Roam = true;
                 _brain.Defend = false;
 

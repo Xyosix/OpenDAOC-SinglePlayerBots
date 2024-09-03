@@ -24,6 +24,10 @@ Everything is currently very command based. Bracketed commands are required, par
 
 /msummon - Summons your group to you. Used to summon your group if you zone into a dungeon or teleport somewhere.
 
+/mpvp [true/false] - Sets PvPMode for mimics. PvPMode bots ignore mobs unless you are attacked. When false, bots will immediately attack mobs when you cast or go into attack mode with one targeted.
+	- With a target: Sets PvPMode for target mimic.
+	- With no target: Sets PvPMode for any grouped mimics.	
+
 For PvE: 
 
    Use the command "/mlfg" to see a list of potential groupmembers. It's currently very single-player focused, so the list and level of bots will be based on the first person to call it until some time passes. Integration for more players will be implemented eventually. They might not join if they are higher level than you.
@@ -52,7 +56,7 @@ For RvR:
 
 Commands for testing:
 
-/m [Classname] (Level)
+/m [Classname] (Level) - Summons a single bot. Defaults to callers level if level is omitted.
    - Classname - summons a mimic with a level equal to the caller.
    - Level - The level of the bot.
 
@@ -60,6 +64,10 @@ Commands for testing:
 - Realm - The realm of the bots.
 - Amount - The amount in the group.
 - Level - The level of all bots in the group.
+
+/mpc [true/false] - Sets PreventCombat setting. Will make a bot passive and not aggro or attack.
+	- With a target: Sets PreventCombat for Mimic. If the Mimic is in a group, the whole group will be set.
+	- With no target: Sets PreventCombat for any grouped Mimics.
 
 There are also commands from interacting with MimicNPCs. They are mostly for testing with the exception of
 [Group] - [Leader] - [MainPuller] - [MainCC] - [MainTank] - [MainAssist]. These set their respective roles or attempt to group with the bot.
