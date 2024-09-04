@@ -672,7 +672,7 @@ namespace DOL.GS.Scripts
             GamePlayer player = client.Player;
             MimicNPC target = player.TargetObject as MimicNPC;
 
-            if (player.Group == null || target == null || !player.Group.IsInTheGroup(target))
+            if (target == null || player.Group == null || (player.Group != null && !player.Group.IsInTheGroup(target)))
                 return;
 
             if (!target.HasAbility(Abilities.Guard))

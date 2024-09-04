@@ -291,7 +291,8 @@ namespace DOL.GS.Scripts
                 "[Spells] - [Inst Harmful] - [Harmful Spells] - [Inst Misc] - [Misc Spells] - [Inst Heal] - [Heal Spells] - [CC]\n\n " +
                 "[Styles] - [Abilities]\n\n " +
                 "[Spec] - [Stats] - [Ability Effects] - [Spell Effects]\n\n " +
-                "[Hood] [Weapon] [Helm] [Torso] [Legs] [Arms] [Hands] [Boots] [Jewelry]\n\n " +
+                "[Inventory]\n\n" +
+                "[Hood] [RightHand] [LeftHand] [TwoHand] [Ranged] [Helm] [Torso] [Legs] [Arms] [Hands] [Boots] [Jewelry]\n\n " +
                 "[Delete]", eChatType.CT_Say, eChatLoc.CL_PopupWindow);
             return true;
         }
@@ -307,6 +308,20 @@ namespace DOL.GS.Scripts
                 return false;
 
             string message = string.Empty;
+            int itemIndex;
+
+            if (int.TryParse(str, out itemIndex) )
+            {
+                itemIndex += (int)eInventorySlot.FirstBackpack - 1;
+
+                if (itemIndex < (int)eInventorySlot.LastBackpack)
+                {
+                    DbInventoryItem item = Inventory.GetItem((eInventorySlot)itemIndex);
+
+                    if (item != null && RemoveAndAddItemToEmptyPlayerInventorySlot(item, player))
+                        return true;
+                }
+            }
 
             switch (str)
             {
@@ -359,6 +374,12 @@ namespace DOL.GS.Scripts
                     if (!HasAbility("Guard"))
                     {
                         message = "I do not have that ability.";
+                        break;
+                    }
+
+                    if (Group == null || Group != null && !Group.IsInTheGroup(player))
+                    {
+                        message = "We must be in the same group.";
                         break;
                     }
 
@@ -486,6 +507,9 @@ namespace DOL.GS.Scripts
                             message += abilityEffect?.Name + "\n";
                     }
 
+                    if (message == string.Empty)
+                        message = "No active ability effects.";
+
                     break;
                 }
 
@@ -496,6 +520,9 @@ namespace DOL.GS.Scripts
                         if (spellEffect != null)
                             message += spellEffect?.Name + "\n";
                     }
+
+                    if (message == string.Empty)
+                        message = "No active spell effects.";
 
                     break;
                 }
@@ -533,138 +560,32 @@ namespace DOL.GS.Scripts
 
                 case "Hood": IsCloakHoodUp = !IsCloakHoodUp; break;
 
-                case "Helm":
+                case "Inventory":
                 {
-                    DbInventoryItem item = Inventory.GetItem(eInventorySlot.HeadArmor);
+                    ICollection<DbInventoryItem> items = Inventory.GetItemRange(eInventorySlot.FirstBackpack, eInventorySlot.LastBackpack);
 
-                    if (item != null)
+                    if (items != null && items.Any())
                     {
-                        Inventory.RemoveItem(item);
-
-                        if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
-                        {
-                            player.SendPrivateMessage(player, "No room in your backpack.");
-                            Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
-                        }
+                        int index = 1;
+                        foreach (DbInventoryItem item in items)
+                            message += "[" + index + "]" + ". " + item.Name;
                     }
+                    else
+                        message = "Inventory is empty";
 
-                    BroadcastLivingEquipmentUpdate();
                     break;
                 }
 
-                case "Torso":
-                {
-                    DbInventoryItem item = Inventory.GetItem(eInventorySlot.TorsoArmor);
-
-                    if (item != null)
-                    {
-                        Inventory.RemoveItem(item);
-
-                        if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
-                        {
-                            player.SendPrivateMessage(player, "No room in your backpack.");
-                            Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
-                        }
-                    }
-
-                    BroadcastLivingEquipmentUpdate();
-                    break;
-                }
-
-                case "Legs":
-                {
-                    DbInventoryItem item = Inventory.GetItem(eInventorySlot.LegsArmor);
-
-                    if (item != null)
-                    {
-                        Inventory.RemoveItem(item);
-
-                        if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
-                        {
-                            player.SendPrivateMessage(player, "No room in your backpack.");
-                            Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
-                        }
-                    }
-
-                    BroadcastLivingEquipmentUpdate();
-                    break;
-                }
-
-                case "Arms":
-                {
-                    DbInventoryItem item = Inventory.GetItem(eInventorySlot.ArmsArmor);
-
-                    if (item != null)
-                    {
-                        Inventory.RemoveItem(item);
-
-                        if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
-                        {
-                            player.SendPrivateMessage(player, "No room in your backpack.");
-                            Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
-                        }
-                    }
-
-                    BroadcastLivingEquipmentUpdate();
-                    break;
-                }
-
-                case "Hands":
-                {
-                    DbInventoryItem item = Inventory.GetItem(eInventorySlot.HandsArmor);
-
-                    if (item != null)
-                    {
-                        Inventory.RemoveItem(item);
-
-                        if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
-                        {
-                            player.SendPrivateMessage(player, "No room in your backpack.");
-                            Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
-                        }
-                    }
-
-                    BroadcastLivingEquipmentUpdate();
-                    break;
-                }
-
-                case "Boots":
-                {
-                    DbInventoryItem item = Inventory.GetItem(eInventorySlot.FeetArmor);
-
-                    if (item != null)
-                    {
-                        Inventory.RemoveItem(item);
-
-                        if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
-                        {
-                            player.SendPrivateMessage(player, "No room in your backpack.");
-                            Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
-                        }
-                    }
-
-                    BroadcastLivingEquipmentUpdate();
-                    break;
-                }
-
-                case "Weapon":
-                {
-                    DbInventoryItem item = Inventory.GetItem(Inventory.FindFirstFullSlot(eInventorySlot.DistanceWeapon, eInventorySlot.RightHandWeapon));
-
-                    if (item != null)
-                    {
-                        Inventory.RemoveItem(item);
-
-                        if (!(player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item)))
-                        {
-                            player.SendPrivateMessage(player, "No room in your backpack.");
-                            Inventory.AddItem((eInventorySlot)item.SlotPosition, item);
-                        }
-                    }
-
-                    BroadcastLivingEquipmentUpdate();
-                    break;
-                }
+                case "Helm": RemoveItem(eInventorySlot.HeadArmor, player); break;
+                case "Torso": RemoveItem(eInventorySlot.TorsoArmor, player); break;
+                case "Legs": RemoveItem(eInventorySlot.LegsArmor, player); break;
+                case "Arms": RemoveItem(eInventorySlot.ArmsArmor, player); break;
+                case "Hands": RemoveItem(eInventorySlot.HandsArmor, player); break;
+                case "Boots": RemoveItem(eInventorySlot.FeetArmor, player); break;
+                case "RightHand": RemoveItem(eInventorySlot.RightHandWeapon, player); break;
+                case "LeftHand": RemoveItem(eInventorySlot.LeftHandWeapon, player); break;
+                case "TwoHand": RemoveItem(eInventorySlot.TwoHandWeapon, player); break;
+                case "Ranged": RemoveItem(eInventorySlot.DistanceWeapon, player); break;
 
                 case "Jewelry":
                 {
@@ -673,8 +594,7 @@ namespace DOL.GS.Scripts
                         if (i is Slot.TORSO or Slot.LEGS or Slot.ARMS or Slot.FOREARMS or Slot.SHIELD)
                             continue;
 
-                        DbInventoryItem item = Inventory.GetItem((eInventorySlot)i);
-                        player.Inventory.AddItem(eInventorySlot.FirstEmptyBackpack, item);
+                        RemoveItem((eInventorySlot)i, player);
                     }
 
                     break;
@@ -696,7 +616,7 @@ namespace DOL.GS.Scripts
                 default: break;
             }
 
-            if (message.Length > 0)
+            if (message != string.Empty)
                 player.Out.SendMessage(message, eChatType.CT_System, eChatLoc.CL_PopupWindow);
 
             return true;
@@ -707,7 +627,7 @@ namespace DOL.GS.Scripts
             if (source == null || str == null)
                 return false;
 
-            if (Group != null && Group.GetMembersInTheGroup().Contains(source))
+            if (Group != null && Group.IsInTheGroup(source))
             {
                 str = str.ToLower();
 
@@ -721,6 +641,100 @@ namespace DOL.GS.Scripts
             }
 
             return base.SayReceive(source, str);
+        }
+
+        public override bool ReceiveItem(GameLiving source, DbInventoryItem item)
+        {
+            if (source == null || item == null)
+                return false;
+
+            GamePlayer player = source as GamePlayer;
+
+            // TODO: Add group checks when done testing
+            //if ((Group == null || Group != null && !Group.IsInTheGroup(source)) && player.Client.Account.PrivLevel == 1)
+            //    return false;
+
+            bool equipItem = false;
+
+            foreach (eEquipmentItems equipmentItem in Enum.GetValues(typeof(eEquipmentItems)))
+            {
+                if (item.Item_Type == (int)equipmentItem)
+                {
+                    equipItem = true;
+                    break;
+                }
+            }
+
+            if (equipItem)
+                return EquipRecievedItem(item, player);
+
+
+            return base.ReceiveItem(source, item);
+        }
+
+        private bool EquipRecievedItem(DbInventoryItem itemToEquip, GamePlayer player)
+        {
+            if (!HasAbilityToUseItem(itemToEquip.Template))
+                return false;
+
+            eInventorySlot slotToEquip = (eInventorySlot)itemToEquip.Item_Type;
+
+            if (slotToEquip == eInventorySlot.LeftHandWeapon && itemToEquip.Object_Type != (int)eObjectType.Shield)
+            {
+                if (Inventory.GetItem(eInventorySlot.RightHandWeapon) == null)
+                    slotToEquip = eInventorySlot.RightHandWeapon;
+                else if (!CharacterClass.CanUseLefthandedWeapon)
+                    return false;
+            }
+
+            DbInventoryItem equippedItem = Inventory.GetItem(slotToEquip);
+
+            if (equippedItem != null && !RemoveAndAddItemToEmptyPlayerInventorySlot(equippedItem, player))
+                return false;
+
+            player.Inventory.RemoveItem(itemToEquip);
+
+            if (Inventory.AddItem(slotToEquip, itemToEquip))
+            {
+                RefreshItemBonuses();
+                UpdateNPCEquipmentAppearance();
+
+                return true;
+            }
+            else
+                player.Inventory.AddItem(player.Inventory.FindFirstEmptySlot(eInventorySlot.FirstBackpack, eInventorySlot.LastBackpack), itemToEquip);
+
+            return false;
+        }
+
+        private void RemoveItem(eInventorySlot inventorySlot, GamePlayer player)
+        {
+            DbInventoryItem itemToRemove = Inventory.GetItem(inventorySlot);
+
+            if (itemToRemove != null)
+                RemoveAndAddItemToEmptyPlayerInventorySlot(itemToRemove, player);
+            else
+                player.Out.SendMessage("There is nothing equipped in that slot.", eChatType.CT_Say, eChatLoc.CL_ChatWindow);
+        }
+
+        private bool RemoveAndAddItemToEmptyPlayerInventorySlot(DbInventoryItem itemToAdd, GamePlayer player)
+        {
+            eInventorySlot validSlot = player.Inventory.FindFirstEmptySlot(eInventorySlot.FirstBackpack, eInventorySlot.LastBackpack);
+
+            if (validSlot != eInventorySlot.Invalid)
+            {
+                Inventory.RemoveItem(itemToAdd);
+                player.Inventory.AddItem(validSlot, itemToAdd);
+            }
+            else
+            {
+                player.Out.SendMessage("No room in your backpack.", eChatType.CT_Say, eChatLoc.CL_ChatWindow);
+                return false;
+            }
+
+            UpdateNPCEquipmentAppearance();
+
+            return true;
         }
 
         public void SpendSpecPoints(byte level, byte previousLevel)

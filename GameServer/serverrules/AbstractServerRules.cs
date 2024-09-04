@@ -692,7 +692,7 @@ namespace DOL.GS.ServerRules
 			if (living == null || item == null)
 				return false;
 
-			GamePlayer player = living as GamePlayer;
+			IGamePlayer player = living as IGamePlayer;
 
 			// GMs can equip everything
 			if (player != null && player.Client.Account.PrivLevel > (uint)ePrivLevel.Player)
