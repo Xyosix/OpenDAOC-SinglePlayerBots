@@ -597,6 +597,17 @@ namespace DOL.GS.Styles
                     && (living.ActiveWeapon == null || (living.ActiveWeapon.Item_Type != Slot.RIGHTHAND && living.ActiveWeapon.Item_Type != Slot.LEFTHAND)))
                     return false;
 
+					eObjectType objectType = (eObjectType) weapon.Object_Type;
+
+					// Treat a left axe as a normal axe.
+					if ((eObjectType) weapon.Object_Type is eObjectType.LeftAxe)
+						objectType = eObjectType.Axe;
+
+					// Weapon type check.
+					return GameServer.ServerRules.IsObjectTypesEqual(weaponTypeRequirement, objectType);
+				}
+			}
+		}
                 // weapon type check
                 return GameServer.ServerRules.IsObjectTypesEqual(
                         (eObjectType)style.WeaponTypeRequirement,
