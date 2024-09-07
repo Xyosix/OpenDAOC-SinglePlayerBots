@@ -46,12 +46,14 @@ namespace DOL.GS.Spells
         /// </summary>
         protected bool m_startReuseTimer = true;
 
-        private long _castStartTick;
-        private long _castEndTick;
-        private long _calculatedCastTime;
+		private QuickCastECSGameEffect _quickcast;
+		private long _castStartTick;
+		private long _castEndTick;
+		private long _calculatedCastTime;
 
-        public long CastStartTick => _castStartTick;
-        public bool StartReuseTimer => m_startReuseTimer;
+		public bool IsQuickCasting => _quickcast != null;
+		public long CastStartTick => _castStartTick;
+		public bool StartReuseTimer => m_startReuseTimer;
 
         /// <summary>
         /// Can this spell be queued with other spells?
@@ -378,6 +380,10 @@ namespace DOL.GS.Spells
             if (Spell.Uninterruptible)
                 return false;
 
+			if (Caster.effectListComponent.ContainsEffectForEffectType(eEffect.MasteryOfConcentration)
+				|| Caster.effectListComponent.ContainsEffectForEffectType(eEffect.FacilitatePainworking)
+				|| IsQuickCasting)
+				return false;
             if (Caster.effectListComponent.ContainsEffectForEffectType(eEffect.MasteryOfConcentration)
                 || Caster.effectListComponent.ContainsEffectForEffectType(eEffect.FacilitatePainworking)
                 || Caster.effectListComponent.ContainsEffectForEffectType(eEffect.QuickCast))
@@ -496,16 +502,17 @@ namespace DOL.GS.Spells
                 }
             }
 
-            m_caster.CancelFocusSpell();
+			m_caster.CancelFocusSpell();
+			_quickcast = EffectListService.GetAbilityEffectOnTarget(m_caster, eEffect.QuickCast) as QuickCastECSGameEffect;
 
-            var quickCast = EffectListService.GetAbilityEffectOnTarget(m_caster, eEffect.QuickCast);
+			if (IsQuickCasting)
+				_quickcast.ExpireTick = GameLoop.GameLoopTime + _quickcast.Duration;
 
-            if (quickCast != null)
-                quickCast.ExpireTick = GameLoop.GameLoopTime + quickCast.Duration;
+			GamePlayer playerCaster = m_caster as GamePlayer;
 
-            if (m_caster is GamePlayer playerCaster)
-            {
-                long nextSpellAvailTime = m_caster.TempProperties.GetProperty<long>(GamePlayer.NEXT_SPELL_AVAIL_TIME_BECAUSE_USE_POTION);
+			if (playerCaster != null)
+			{
+				long nextSpellAvailTime = m_caster.TempProperties.GetProperty<long>(GamePlayer.NEXT_SPELL_AVAIL_TIME_BECAUSE_USE_POTION);
 
                 if (nextSpellAvailTime > m_caster.CurrentRegion.Time && Spell.CastTime > 0) // instant spells ignore the potion cast delay
                 {
@@ -530,17 +537,19 @@ namespace DOL.GS.Spells
 				return false;
 			}*/
 
-            // Apply Mentalist RA5L.
-            if (Spell.Range > 0)
-            {
-                SelectiveBlindnessEffect SelectiveBlindness = Caster.EffectList.GetOfType<SelectiveBlindnessEffect>();
-                if (SelectiveBlindness != null)
-                {
-                    GameLiving EffectOwner = SelectiveBlindness.EffectSource;
-                    if (EffectOwner == Target)
-                    {
-                        if (m_caster is GamePlayer && !quiet)
-                            ((GamePlayer)m_caster).Out.SendMessage(string.Format("{0} is invisible to you!", Target.GetName(0, true)), eChatType.CT_Missed, eChatLoc.CL_SystemWindow);
+			// Apply Mentalist RA5L.
+			if (Spell.Range > 0)
+			{
+				SelectiveBlindnessEffect SelectiveBlindness = Caster.EffectList.GetOfType<SelectiveBlindnessEffect>();
+
+				if (SelectiveBlindness != null)
+				{
+					GameLiving EffectOwner = SelectiveBlindness.EffectSource;
+
+					if (EffectOwner==Target)
+					{
+						if (playerCaster != null && !quiet)
+							playerCaster.Out.SendMessage(string.Format("{0} is invisible to you!", Target.GetName(0, true)), eChatType.CT_Missed, eChatLoc.CL_SystemWindow);
 
                         return false;
                     }
@@ -1211,7 +1220,7 @@ namespace DOL.GS.Spells
 			}
 
 			// Doubled power usage if using QuickCast.
-			if (EffectListService.GetAbilityEffectOnTarget(Caster, eEffect.QuickCast) != null && Spell.CastTime > 0)
+			if (IsQuickCasting && Spell.CastTime > 0)
 				powerCost *= 2;
 
 			return (int) powerCost;
@@ -1419,6 +1428,17 @@ namespace DOL.GS.Spells
                     quickcast.Cancel(false);
                 }
             }
+			//the quick cast is unallowed whenever you miss the spell
+			//set the time when casting to can not quickcast during a minimum time
+			if (playerCaster != null)
+			{
+				if (IsQuickCasting && Spell.CastTime > 0)
+				{
+					m_caster.TempProperties.SetProperty(GamePlayer.QUICK_CAST_CHANGE_TICK, m_caster.CurrentRegion.Time);
+					playerCaster.DisableSkill(SkillBase.GetAbility(Abilities.Quickcast), QuickCastAbilityHandler.DISABLE_DURATION);
+					_quickcast.Cancel(false);
+				}
+			}
 
             if (m_ability != null)
                 m_caster.DisableSkill(m_ability.Ability, (m_spell.RecastDelay == 0 ? 3000 : m_spell.RecastDelay));
