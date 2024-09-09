@@ -16,7 +16,9 @@ namespace DOL.GS.Spells
         {
             if (Caster is IGamePlayer playerCaster && playerCaster.ControlledBrain != null)
             {
-                MessageToCaster(LanguageMgr.GetTranslation((Caster as GamePlayer).Client, "SummonCommanderPet.CheckBeginCast.Text"), eChatType.CT_SpellResisted);
+                if (playerCaster is GamePlayer)
+                    MessageToCaster(LanguageMgr.GetTranslation((Caster as GamePlayer).Client, "SummonCommanderPet.CheckBeginCast.Text"), eChatType.CT_SpellResisted);
+
                 return false;
             }
 
