@@ -63,6 +63,7 @@ namespace DOL.AI.Brain
         public bool Roam;
         public bool IsFleeing;
         public bool IsPulling;
+        public bool Debug;
 
         public GameObject LastTargetObject;
         public bool IsFlanking;
@@ -617,7 +618,7 @@ namespace DOL.AI.Brain
 
         public bool CheckDelayRoam()
         {
-            if (CheckSpells(eCheckSpellType.Defensive) || MimicBody.Sit(CheckStats(75)))
+            if (Body.IsCasting || CheckSpells(eCheckSpellType.Defensive) || MimicBody.Sit(CheckStats(75)))
                 return true;
 
             if (Body.Group != null &&
@@ -1461,16 +1462,19 @@ namespace DOL.AI.Brain
             else if (!casted && type == eCheckSpellType.Defensive)
             {
                 if (Body.CanCastMiscSpells)
-                {
-                    foreach (Spell spell in Body.MiscSpells)
-                    {
-                        if (CheckDefensiveSpells(spell))
-                        {
-                            casted = true;
-                            break;
-                        }
-                    }
-                }
+                    casted = CheckDefensiveSpells(Body.MiscSpells);
+
+                //if (Body.CanCastMiscSpells)
+                //{
+                //    foreach (Spell spell in Body.MiscSpells)
+                //    {
+                //        if (CheckDefensiveSpells(spell))
+                //        {
+                //            casted = true;
+                //            break;
+                //        }
+                //    }
+                //}
             }
             else if (!casted && type == eCheckSpellType.Offensive)
             {
@@ -2113,13 +2117,338 @@ namespace DOL.AI.Brain
 
             if (Body?.TargetObject != null)
             {
-                //log.Info(Body.Name + " tried to cast " + spell.Name + " " + spell.SpellType.ToString() + " on " + Body.TargetObject.Name);
+                if (Debug)
+                    log.Info(Body.Name + " tried to cast " + spell.Name + " " + spell.SpellType.ToString() + " on " + Body.TargetObject.Name);
                 //log.Info(Body.TargetObject.Name + " effect is " + LivingHasEffect((GameLiving)Body.TargetObject, spell));
 
                 casted = Body.CastSpell(spell, m_mobSpellLine);
             }
 
             return casted;
+        }
+
+        bool CheckDefensiveSpells(List<Spell> spells)
+        {
+            // Contrary to offensive spells, we don't start with a valid target.
+            // So the idea here is to find a target, switch before calling `CastDefensiveSpell`, then retrieve our previous target.
+            List<(Spell, GameLiving)> spellsToCast = new(spells.Count);
+
+            foreach (Spell spell in spells)
+            {
+                if (CanCastDefensiveSpell(spell, out GameLiving target))
+                    spellsToCast.Add((spell, target));
+            }
+
+            if (spellsToCast.Count == 0)
+                return false;
+
+            GameObject oldTarget = Body.TargetObject;
+            (Spell spell, GameLiving target) spellToCast = spellsToCast[Util.Random(spellsToCast.Count - 1)];
+            Body.TargetObject = spellToCast.target;
+            bool cast = Body.CastSpell(spellToCast.spell, m_mobSpellLine);
+
+            if (Debug)
+            {
+                if (cast)
+                    log.Info(Body.Name + " tried to cast " + spellToCast.spell.Name + " on " + spellToCast.target.Name + " and cast == true");
+                else
+                    log.Info(Body.Name + " tried to cast " + spellToCast.spell.Name + " on " + spellToCast.target.Name + " and cast == false");
+
+                if (LivingHasEffect(spellToCast.target, spellToCast.spell))
+                    log.Info(spellToCast.target.Name + " has the effect already.");
+            }
+
+            Body.TargetObject = oldTarget;
+            return cast;
+
+            bool CanCastDefensiveSpell(Spell spell, out GameLiving target)
+            {
+                target = null;
+
+                // TODO: Handle instrument spells
+                if (spell.NeedInstrument || (!spell.Uninterruptible && Body.IsBeingInterrupted) ||
+                    (spell.HasRecastDelay && Body.GetSkillDisabledDuration(spell) > 0))
+                {
+                    return false;
+                }
+
+                target = FindTargetForDefensiveSpell(spell);
+                return target != null;
+            }
+        }
+
+        protected virtual GameLiving FindTargetForDefensiveSpell(Spell spell)
+        {
+            GameLiving target = null;
+
+            switch (spell.SpellType)
+            {
+                #region Pulse
+
+                case eSpellType.SpeedEnhancement when spell.IsPulsing:
+
+                if (!LivingHasEffect(Body, spell))
+                    target = Body;
+
+                break;
+
+                case eSpellType.Bladeturn when spell.IsPulsing:
+                break;
+
+                case eSpellType.MesmerizeDurationBuff when spell.IsPulsing:
+                break;
+
+                #endregion Pulse
+
+                #region Buffs
+
+                case eSpellType.SpeedEnhancement when spell.IsInstantCast:
+                break;
+
+                case eSpellType.SpeedEnhancement when spell.IsPulsing:
+                case eSpellType.SpeedEnhancement when spell.Target == eSpellTarget.PET:
+                case eSpellType.CombatSpeedBuff when spell.Duration > 20:
+                case eSpellType.CombatSpeedBuff when spell.IsConcentration:
+                case eSpellType.MesmerizeDurationBuff when !spell.IsPulsing:
+                case eSpellType.Bladeturn when !spell.IsPulsing:
+
+                case eSpellType.AcuityBuff:
+                case eSpellType.AFHitsBuff:
+                case eSpellType.AllMagicResistBuff:
+                case eSpellType.ArmorAbsorptionBuff:
+                case eSpellType.BaseArmorFactorBuff:
+                case eSpellType.SpecArmorFactorBuff:
+                case eSpellType.PaladinArmorFactorBuff:
+                case eSpellType.BodyResistBuff:
+                case eSpellType.BodySpiritEnergyBuff:
+                case eSpellType.Buff:
+                case eSpellType.CelerityBuff:
+                case eSpellType.ColdResistBuff:
+                case eSpellType.CombatSpeedBuff:
+                case eSpellType.ConstitutionBuff:
+                case eSpellType.CourageBuff:
+                case eSpellType.CrushSlashTrustBuff:
+                case eSpellType.DexterityBuff:
+                case eSpellType.DexterityQuicknessBuff:
+                case eSpellType.EffectivenessBuff:
+                case eSpellType.EnduranceRegenBuff:
+                case eSpellType.EnergyResistBuff:
+                case eSpellType.FatigueConsumptionBuff:
+                case eSpellType.FlexibleSkillBuff:
+                case eSpellType.HasteBuff:
+                case eSpellType.HealthRegenBuff:
+                case eSpellType.HeatColdMatterBuff:
+                case eSpellType.HeatResistBuff:
+                case eSpellType.HeroismBuff:
+                case eSpellType.KeepDamageBuff:
+                case eSpellType.MagicResistBuff:
+                case eSpellType.MatterResistBuff:
+                case eSpellType.MeleeDamageBuff:
+                case eSpellType.MesmerizeDurationBuff:
+                case eSpellType.MLABSBuff:
+                case eSpellType.ParryBuff:
+                case eSpellType.PowerHealthEnduranceRegenBuff:
+                case eSpellType.PowerRegenBuff:
+                case eSpellType.SavageCombatSpeedBuff:
+                case eSpellType.SavageCrushResistanceBuff:
+                case eSpellType.SavageDPSBuff:
+                case eSpellType.SavageParryBuff:
+                case eSpellType.SavageSlashResistanceBuff:
+                case eSpellType.SavageThrustResistanceBuff:
+                case eSpellType.SpiritResistBuff:
+                case eSpellType.StrengthBuff:
+                case eSpellType.StrengthConstitutionBuff:
+                case eSpellType.SuperiorCourageBuff:
+                case eSpellType.ToHitBuff:
+                case eSpellType.WeaponSkillBuff:
+                case eSpellType.DamageAdd:
+                case eSpellType.OffensiveProc:
+                case eSpellType.DefensiveProc:
+                case eSpellType.DamageShield:
+                case eSpellType.Bladeturn:
+                {
+                    if (spell.IsConcentration)
+                    {
+                        if (spell.Concentration > Body.Concentration)
+                            break;
+
+                        if (Body.effectListComponent.ConcentrationEffects.Count >= 20)
+                            break;
+                    }
+
+                    if (!LivingHasEffect(Body, spell) && !Body.attackComponent.AttackState && spell.Target != eSpellTarget.PET)
+                    {
+                        target = Body;
+                        break;
+                    }
+
+                    if (Body.ControlledBrain != null && Body.ControlledBrain.Body != null && Body.GetDistanceTo(Body.ControlledBrain.Body) <= spell.Range && !LivingHasEffect(Body.ControlledBrain.Body, spell) && spell.Target != eSpellTarget.SELF)
+                    {
+                        if (spell.SpellType == eSpellType.DamageShield)
+                            break;
+
+                        target = Body.ControlledBrain.Body;
+                        break;
+                    }
+
+                    if (Body.Group != null)
+                    {
+                        if (spell.Target == eSpellTarget.REALM || spell.Target == eSpellTarget.GROUP)
+                        {
+                            foreach (GameLiving groupMember in Body.Group.GetMembersInTheGroup())
+                            {
+                                if (groupMember != Body)
+                                {
+                                    if (!LivingHasEffect(groupMember, spell) && !Body.attackComponent.AttackState && groupMember.IsAlive)
+                                    {
+                                        target = groupMember;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    break;
+                }
+
+                #endregion Buffs
+
+                #region Disease Cure/Poison Cure/Summon
+
+                case eSpellType.CureDisease:
+                {
+                    if (Body.IsDiseased)
+                    {
+                        target = Body;
+                        break;
+                    }
+
+                    if (Body.ControlledBrain != null && Body.ControlledBrain.Body != null && Body.ControlledBrain.Body.IsDiseased
+                        && Body.GetDistanceTo(Body.ControlledBrain.Body) <= spell.Range && spell.Target != eSpellTarget.SELF)
+                    {
+                        target = Body.ControlledBrain.Body;
+                        break;
+                    }
+
+                    break;
+                }
+
+                case eSpellType.CurePoison:
+                {
+                    if (Body.IsPoisoned)
+                    {
+                        target = Body;
+                        break;
+                    }
+
+                    if (Body.ControlledBrain != null &&
+                        Body.ControlledBrain.Body != null &&
+                        Body.ControlledBrain.Body.IsPoisoned &&
+                        Body.GetDistanceTo(Body.ControlledBrain.Body) <= spell.Range && spell.Target != eSpellTarget.SELF)
+                    {
+                        target = Body.ControlledBrain.Body;
+                        break;
+                    }
+
+                    break;
+                }
+
+                case eSpellType.Summon:
+                {
+                    target = Body;
+                    break;
+                }
+
+                case eSpellType.SummonMinion:
+                {
+                    // If the list is null, lets make sure it gets initialized.
+                    if (Body.ControlledNpcList == null)
+                        Body.InitControlledBrainArray(2);
+                    else
+                    {
+                        // Let's check to see if the list is full - if it is, we can't cast another minion.
+                        // If it isn't, let them cast.
+                        IControlledBrain[] icb = Body.ControlledNpcList;
+                        int numberOfPets = 0;
+
+                        for (int i = 0; i < icb.Length; i++)
+                        {
+                            if (icb[i] != null)
+                                numberOfPets++;
+                        }
+
+                        if (numberOfPets >= icb.Length)
+                            break;
+                    }
+
+                    target = Body;
+                    break;
+                }
+
+                #endregion Disease Cure/Poison Cure/Summon
+
+                #region Heals
+
+                case eSpellType.CombatHeal:
+                case eSpellType.Heal:
+                case eSpellType.HealOverTime:
+                case eSpellType.MercHeal:
+                case eSpellType.OmniHeal:
+                case eSpellType.PBAoEHeal:
+                case eSpellType.SpreadHeal:
+                {
+                    if (Body.ControlledBrain != null && Body.ControlledBrain.Body != null
+                        && Body.GetDistanceTo(Body.ControlledBrain.Body) <= spell.Range
+                        && Body.ControlledBrain.Body.HealthPercent < Properties.NPC_HEAL_THRESHOLD
+                        && spell.Target != eSpellTarget.SELF)
+                    {
+                        target = Body.ControlledBrain.Body;
+                        break;
+                    }
+
+                    break;
+                }
+
+                #endregion
+
+                case eSpellType.SummonCommander:
+                case eSpellType.SummonDruidPet:
+                case eSpellType.SummonHunterPet:
+                case eSpellType.SummonNecroPet:
+                case eSpellType.SummonUnderhill:
+                case eSpellType.SummonSimulacrum:
+                case eSpellType.SummonSpiritFighter:
+                {
+                    if (Body.ControlledBrain != null)
+                        break;
+
+                    target = Body;
+                    break;
+                }
+
+                case eSpellType.Resurrect:
+                {
+                    if (Body.Group != null)
+                    {
+                        foreach (GameLiving groupMember in Body.Group.GetMembersInTheGroup())
+                        {
+                            if (!groupMember.IsAlive)
+                            {
+                                Body.TargetObject = groupMember;
+                                break;
+                            }
+                        }
+                    }
+
+                    break;
+                }
+
+                default:
+                break;
+            }
+
+            return target;
         }
 
         /// <summary>
@@ -2134,6 +2463,9 @@ namespace DOL.AI.Brain
 
             if (Body.TargetObject is GameLiving living && (spell.Duration == 0 || !LivingHasEffect(living, spell) || spell.SpellType == eSpellType.DirectDamageWithDebuff || spell.SpellType == eSpellType.DamageSpeedDecrease))
             {
+                if (Debug)
+                    log.Info(Body.Name + " tried to cast " + spell.Name + " " + spell.SpellType.ToString() + " on " + Body.TargetObject.Name);
+
                 casted = Body.CastSpell(spell, m_mobSpellLine);
             }
 

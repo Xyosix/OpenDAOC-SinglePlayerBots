@@ -120,7 +120,7 @@ namespace DOL.GS.Scripts
             int baseBuffBonusCap;
             int specBuffBonusCap;
 
-            if (living is MimicNPC || living is GamePlayer)
+            if (living is IGamePlayer)
             {
                 baseBuffBonusCap = (int)(living.Level * 1.25);
                 specBuffBonusCap = (int)(living.Level * 1.5 * 1.25);

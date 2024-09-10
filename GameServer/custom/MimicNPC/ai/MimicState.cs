@@ -123,7 +123,9 @@ namespace DOL.AI.Brain
 
     public class MimicState_FollowLeader : MimicState
     {
-        private GameLiving leader;
+        private GameLiving _leader;
+        private int _followDistance;
+        private int _targetFollowDistance => 80 + _brain.Body.GroupIndex * 20;
 
         public MimicState_FollowLeader(MimicBrain brain) : base(brain)
         {
@@ -134,18 +136,19 @@ namespace DOL.AI.Brain
         {
             if (_brain.Body.Group != null)
             {
-                leader = _brain.Body.Group.LivingLeader;
-                _brain.Body.Follow(_brain.Body.Group.LivingLeader, 200, 5000);
+                _leader = _brain.Body.Group.LivingLeader;
+                _followDistance = _targetFollowDistance;
+                _brain.Body.Follow(_brain.Body.Group.LivingLeader, _followDistance, 5000);
             }
             else
-                _brain.FSM.SetCurrentState(eFSMStateType.IDLE);
+                _brain.FSM.SetCurrentState(eFSMStateType.WAKING_UP);
 
             base.Enter();
         }
 
         public override void Think()
         {
-            if (_brain.Body.Group == null)
+            if (_brain.Body.Group == null || _leader == _brain.Body)
             {
                 _brain.Body.StopFollowing();
                 _brain.FSM.SetCurrentState(eFSMStateType.WAKING_UP);
@@ -153,19 +156,16 @@ namespace DOL.AI.Brain
                 return;
             }
 
-            if (leader == null)
-                leader = _brain.Body.Group.LivingLeader;
+            if (_leader == null || (_leader != null && _leader.ObjectState != GameObject.eObjectState.Active || !_brain.Body.Group.IsInTheGroup(_leader)))
+                _leader = _brain.Body.Group.LivingLeader;
 
-            //if (!_brain.PreventCombat)
-            //{
-            //if (_brain.CheckProximityAggro(_brain.AggroRange))
-            //{
-            //    _brain.FSM.SetCurrentState(eFSMStateType.AGGRO);
-            //    return;
-            //}
-            //}
+            if (_followDistance != _targetFollowDistance)
+            {
+                _followDistance = _targetFollowDistance;
+                _brain.Body.Follow(_leader, _followDistance, 5000);
+            }
 
-            if ((leader.IsCasting || leader.IsAttacking) && leader.TargetObject is GameLiving livingTarget && _brain.CanAggroTarget(livingTarget))
+            if ((_leader.IsCasting || _leader.IsAttacking) && _leader.TargetObject is GameLiving livingTarget && _brain.CanAggroTarget(livingTarget))
             {
                 _brain.OnLeaderAggro();
                 _brain.AddToAggroList(livingTarget, 1);
@@ -173,12 +173,15 @@ namespace DOL.AI.Brain
                 return;
             }
 
-            if (_brain.Body.FollowTarget != leader)
-                _brain.Body.Follow(_brain.Body.Group.LivingLeader, 200, 5000);
+            if (_brain.Body.FollowTarget != _leader)
+                _brain.Body.Follow(_brain.Body.Group.LivingLeader, _followDistance, 5000);
 
             if (!_brain.Body.InCombat)
             {
-                if (!_brain.CheckSpells(MimicBrain.eCheckSpellType.Defensive))
+                if (_brain.Body.IsSitting && !_brain.CheckStats(75))
+                    _brain.MimicBody.Sit(false);
+
+                if (!_brain.Body.IsSitting && !_brain.Body.IsCasting && !_brain.CheckSpells(MimicBrain.eCheckSpellType.Defensive))
                     _brain.MimicBody.Sit(_brain.CheckStats(75));
             }
 
@@ -208,7 +211,7 @@ namespace DOL.AI.Brain
 
         public override void Enter()
         {
-            _brain.MimicBody.Sit(false);
+            _brain.MimicBody.IsSitting = false;
 
             _aggroEndTime = GameLoop.GameLoopTime + LEAVE_WHEN_OUT_OF_COMBAT_FOR;
             _checkAggroTime = GameLoop.GameLoopTime;
@@ -346,7 +349,7 @@ namespace DOL.AI.Brain
                 {
                     _brain.Body.StopMoving();
                 }
-                else if (!delayRoam && !_brain.Body.IsCasting && !_brain.Body.IsSitting && !_brain.Body.IsMoving && !_brain.Body.movementComponent.HasActiveResetHeadingAction)
+                else if (!delayRoam && !_brain.Body.IsSitting && !_brain.Body.IsMoving && !_brain.Body.movementComponent.HasActiveResetHeadingAction)
                 {
                     if (!_nextRoamingTickSet)
                     {

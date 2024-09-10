@@ -285,7 +285,7 @@ namespace DOL.GS.Scripts
 
             player.Out.SendMessage(
                 "---------------------------------------\n" +
-                "[State] [Prevent Combat] [Brain]\n\n " +
+                "[State] [Prevent Combat] [Brain] [Debug]\n\n " +
                 "[Group] - [Leader] - [MainPuller] - [MainCC] - [MainTank] - [MainAssist]\n\n " +
                 "[Guard]\n\n " +
                 "[Spells] - [Inst Harmful] - [Harmful Spells] - [Inst Misc] - [Misc Spells] - [Inst Heal] - [Heal Spells] - [CC]\n\n " +
@@ -325,6 +325,14 @@ namespace DOL.GS.Scripts
 
             switch (str)
             {
+                case "Debug":
+                {
+                    MimicBrain.Debug = !MimicBrain.Debug;
+
+                    message = "Debug is " + MimicBrain.Debug;
+                    break;
+                }
+
                 case "Brain":
                 MimicBrain newBrain = new MimicBrain();
                 newBrain.MimicBody = this;
@@ -333,7 +341,11 @@ namespace DOL.GS.Scripts
 
                 case "State":
                 {
-                    message = Brain.FSM.GetCurrentState().ToString();
+                    message = Brain.FSM.GetCurrentState().ToString() + "\n";
+                    message += "IsSitting: " + IsSitting + "\n";
+                    message += "IsMezzed: " + IsMezzed + "\n";
+                    message += "IsStunned: " + IsStunned + "\n";
+                    message += "IsRooted: " + IsRooted + "\n";
                     break;
                 }
 
@@ -518,7 +530,7 @@ namespace DOL.GS.Scripts
                     foreach (ECSGameSpellEffect spellEffect in EffectListComponent.GetSpellEffects())
                     {
                         if (spellEffect != null)
-                            message += spellEffect?.Name + "\n";
+                            message += spellEffect.Name + " " + spellEffect.EffectType + "\n";
                     }
 
                     if (message == string.Empty)
