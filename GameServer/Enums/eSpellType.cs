@@ -212,6 +212,8 @@ namespace DOL.GS
         SummonSiegeTrebuchet,
         SummonJuggernaut,
         SummonAnimistAmbusher,
-        StrikingTheSoul
+        StrikingTheSoul,
+        PrayerHeal,
+        SummonMimic
     }
 }

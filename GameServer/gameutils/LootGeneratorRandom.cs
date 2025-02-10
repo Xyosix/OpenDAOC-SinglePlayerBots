@@ -105,7 +105,7 @@ namespace DOL.GS
 		{
 			LootList loot = base.GenerateLoot(mob, killer);
 
-			if (Util.Chance(10))
+			if (Util.Chance(100))
 			{
 				DbItemTemplate[] itemTemplates = null;
 

@@ -32,10 +32,15 @@ namespace DOL.GS.Spells
 			m_type = spellType;
 		}
 
-		/// <summary>
-		/// Spell type name of the denoted handler
-		/// </summary>
-		public string SpellType {
+        public SpellHandlerAttribute(eSpellType spellType)
+        {
+			m_type = spellType.ToString();
+        }
+
+        /// <summary>
+        /// Spell type name of the denoted handler
+        /// </summary>
+        public string SpellType {
 			get { return m_type; }
 		}
 	}

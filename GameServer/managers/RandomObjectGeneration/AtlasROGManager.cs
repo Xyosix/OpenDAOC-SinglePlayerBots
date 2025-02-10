@@ -8,7 +8,14 @@ namespace DOL.GS
     public static class AtlasROGManager
     {
         private static DbItemTemplate beadTemplate = null;
-        
+        private static DbItemTemplate summonMerchantTemplate = null;
+        private static DbItemTemplate rustyTinderboxTemplate = null;
+        private static DbItemTemplate eversparkTinderboxTemplate = null;
+        private static DbItemTemplate enchantedTinderboxTemplate = null;
+        private static DbItemTemplate summonMimicCleric = null;
+        private static DbItemTemplate summonMimic = null;
+
+
         private static string _currencyID = ServerProperties.Properties.ALT_CURRENCY_ID;
 
         public static void GenerateROG(GameLiving living)
@@ -296,6 +303,108 @@ namespace DOL.GS
             
             DbItemUnique item = new DbItemUnique(beadTemplate);
             
+            return item;
+        }
+        
+        public static DbItemUnique GenerateSummonCleric()
+        {
+            if (summonMimicCleric == null)
+                summonMimicCleric = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Cleric");
+
+            DbItemUnique item = new DbItemUnique(summonMimicCleric);
+
+            return item;
+        }
+
+        public static DbItemUnique GenerateMimic(eRealm realm)
+        {
+
+            if (realm == eRealm.Albion)
+            {
+                var rand = Util.Random(1, 13);
+                switch (rand)
+                {
+                    case 1:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Paladin");
+                        break;
+                    case 2:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Armsman");
+                        break;
+                    case 3:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Scout");
+                        break;
+                    case 4:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Minstrel");
+                        break;
+                    case 5:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Theurgist");
+                        break;
+                    case 6:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Cleric");
+                        break;
+                    case 7:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Wizard");
+                        break;
+                    case 8:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Sorcerer");
+                        break;
+                    case 9:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Infiltrator");
+                        break;
+                    case 10:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Friar");
+                        break;
+                    case 11:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Mercenary");
+                        break;
+                    case 12:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Cabalist");
+                        break;
+                    case 13:
+                        summonMimic = GameServer.Database.FindObjectByKey<DbItemTemplate>("SummonMimic_Reaver");
+                        break;
+                }
+            }             
+            DbItemUnique item = new DbItemUnique(summonMimic);
+            return item;
+        }
+
+        public static DbItemUnique GenerateRustyTinderbox()
+        {
+            if (rustyTinderboxTemplate == null)
+                rustyTinderboxTemplate = GameServer.Database.FindObjectByKey<DbItemTemplate>("Rusty_Tinderbox");
+            DbItemUnique item = new DbItemUnique(rustyTinderboxTemplate);      
+
+            return item;
+        }
+
+        public static DbItemUnique GenerateEversparkTinderbox()
+        {
+            if (eversparkTinderboxTemplate == null)
+                eversparkTinderboxTemplate = GameServer.Database.FindObjectByKey<DbItemTemplate>("Everspark_Tinderbox");
+            
+            DbItemUnique item = new DbItemUnique(eversparkTinderboxTemplate);
+
+            return item;
+        }
+
+        public static DbItemUnique GenerateEnchatedTinderbox()
+        {
+            if (enchantedTinderboxTemplate == null)
+                enchantedTinderboxTemplate = GameServer.Database.FindObjectByKey<DbItemTemplate>("Enchanted_Tinderbox");
+
+            DbItemUnique item = new DbItemUnique(enchantedTinderboxTemplate);
+
+            return item;
+        }
+
+        public static DbItemUnique GenerateSummonMerchant()
+        {
+            if (summonMerchantTemplate == null)
+                summonMerchantTemplate = GameServer.Database.FindObjectByKey<DbItemTemplate>("summon_merchant");
+
+            DbItemUnique item = new DbItemUnique(summonMerchantTemplate);
+
             return item;
         }
     }

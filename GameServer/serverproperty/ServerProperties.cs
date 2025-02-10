@@ -2721,11 +2721,14 @@ namespace DOL.GS.ServerProperties
 		[ServerProperty("atlas_rog", "rog_use_weighted_generation", "toggle weighted rolls vs. simple generation", false)]
 		public static bool ROG_USE_WEIGHTED_GENERATION;
 
-		#endregion
+		[ServerProperty("atlas_rog", "rog_item_proc_chance", "chance for an item to have a proc on it (in %)", 25)]
+		public static int ROG_ITEM_PROC_CHANCE;
 
-		#region CONTROLS_AUTOMATION
+        #endregion
 
-		[ServerProperty("controls_automation", "auto_select_opening_style", "Automatically perform the opening style of the currently selected style if conditions are not met (recursive).", false)]
+        #region CONTROLS_AUTOMATION
+
+        [ServerProperty("controls_automation", "auto_select_opening_style", "Automatically perform the opening style of the currently selected style if conditions are not met (recursive).", false)]
 		public static bool AUTO_SELECT_OPENING_STYLE;
 
 		[ServerProperty("controls_automation", "allow_auto_backup_styles", "Allow players to set a style to be used automatically with /backupstyle.", false)]

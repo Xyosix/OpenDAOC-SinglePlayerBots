@@ -32,7 +32,7 @@ namespace DOL.GS.Spells
                     Npc = new GameAtlasMerchant();
                     Npc = (GameAtlasMerchant) Assembly.GetAssembly(typeof (GameServer)).CreateInstance(template.ClassType, false);
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                 }
                 if (Npc == null)
@@ -41,7 +41,7 @@ namespace DOL.GS.Spells
                     {
                         Npc = (GameAtlasMerchant) Assembly.GetExecutingAssembly().CreateInstance(template.ClassType, false);
                     }
-                    catch (Exception e)
+                    catch (Exception)
                     {
                     }
                 }

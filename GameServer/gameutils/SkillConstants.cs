@@ -857,5 +857,10 @@ namespace DOL.GS
 		public const string Perfecter 	= "Perfecter";
 		public const string Stormlord 	= "Stormlord";
 		public const string Sojourner 	= "Sojourner";
-	}
+
+
+        ///Custom Spec Lines
+        ///
+        public const string BattlePrayers = "Battle Prayers";
+    }
 }
