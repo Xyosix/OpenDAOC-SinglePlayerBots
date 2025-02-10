@@ -105,6 +105,10 @@ namespace DOL.GS
 			if (log.IsDebugEnabled)
 			{
 				log.Debug("Found " + m_globalGenerators.Count + " Global LootGenerators");
+				foreach(var m in m_globalGenerators)
+				{
+					log.Debug("Manager: " + m.ToString());
+				}
 				log.Debug("Found " + m_mobNameGenerators.Count + " Mobnames registered by LootGenerators");
 				log.Debug("Found " + m_mobGuildGenerators.Count + " Guildnames registered by LootGenerators");
 			}

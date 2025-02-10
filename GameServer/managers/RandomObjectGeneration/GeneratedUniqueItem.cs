@@ -30,6 +30,7 @@ namespace DOL.GS
         private static int ItemResistWeight = Properties.ROG_ITEM_RESIST_WEIGHT;
         private static int ItemSkillWeight = Properties.ROG_ITEM_SKILL_WEIGHT;
         private static int ItemAllSkillWeight = Properties.ROG_STAT_ALLSKILL_WEIGHT;
+        private static int ItemProcChance = Properties.ROG_ITEM_PROC_CHANCE;
 
         //base item quality for all rogs
         private static int RogStartingQual = Properties.ROG_STARTING_QUAL;
@@ -316,7 +317,9 @@ namespace DOL.GS
 
         private void GenerateProc()
         {
-            if (!Util.Chance(1)) return;
+            //if (!Util.Chance(1)) return;
+            Console.WriteLine("Generating Proc[ Chance: " + ItemProcChance + " ]");
+            if (!Util.Chance(ItemProcChance)) return;
             if (this.Object_Type == (int)eObjectType.Magical)
                 return;
 

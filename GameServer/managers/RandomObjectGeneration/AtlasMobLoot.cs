@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using DOL.Database;
+using DOL.GS.Scripts;
 
 namespace DOL.GS {
 
@@ -13,7 +14,7 @@ namespace DOL.GS {
     public class ROGMobGenerator : LootGeneratorBase {
 
         //base chance in %
-        public static ushort BASE_ROG_CHANCE = 14;
+        public static ushort BASE_ROG_CHANCE = 15;
 
 
         /// <summary>
@@ -28,14 +29,34 @@ namespace DOL.GS {
 
             try
             {
+                Console.WriteLine("A mob has died!");
                 GamePlayer player = killer as GamePlayer;
+
                 if (killer is GameNPC && ((GameNPC)killer).Brain is IControlledBrain)
                 {
-                    player = ((ControlledMobBrain)((GameNPC)killer).Brain).GetPlayerOwner();
+                    //This can possibly cause a fail from a Mimic's pet.
+                    Console.WriteLine("Killer is a controlled brain");
+                    player = ((ControlledMobBrain)((GameNPC)killer).Brain).GetPlayerOwner();                 
+                }
+              
+                if (killer is MimicNPC)
+                {
+                    var group = ((MimicNPC)killer).Group.GetMembersInTheGroup();
+                    Console.WriteLine("Killer was a Mimic; Group Member Count: " + group.Count);
+
+                    foreach (var member in group)
+                    {
+                        if(member is GamePlayer)
+                        {
+                            Console.WriteLine("Player found in mimic's group! Group Mate: " + member.Name);
+                            player = member as GamePlayer;
+                        }
+                    }
                 }
 
                 if (player == null)
                 {
+                    //Console.WriteLine("Player is still null; exiting");
                     return loot;
                 }
 
@@ -44,6 +65,7 @@ namespace DOL.GS {
                 //grey con dont drop loot
                 if (killedcon <= -3)
                 {
+                    //Console.WriteLine("Mob too low; exiting");
                     return loot;
                 }
 
@@ -51,6 +73,7 @@ namespace DOL.GS {
                 // allow the leader to decide the loot realm
                 if (player.Group != null)
                 {
+                    //Console.WriteLine("In a group");
                     player = player.Group.Leader;
                 }
 
@@ -63,6 +86,7 @@ namespace DOL.GS {
 
                 if (bg != null)
                 {
+                    //Console.WriteLine("Battlegroup baby!");
                     var maxDropCap = bg.PlayerCount / 50;
                     if (maxDropCap < 1) maxDropCap = 1;
                     if (mob is GameEpicNPC)
@@ -84,10 +108,14 @@ namespace DOL.GS {
                         }
                     }
                 }
+
                 //players below level 50 will always get loot for their class, 
                 //or a valid class for one of their groupmates
                 else if (player.Group != null)
                 {
+                    //Group Loot Roll
+
+                    //Console.WriteLine("In a group2, I think.");
                     var MaxDropCap = Math.Round((decimal) (player.Group.MemberCount)/3);
                     if (MaxDropCap < 1) MaxDropCap = 1;
                     if (MaxDropCap > 3) MaxDropCap = 3;
@@ -104,15 +132,17 @@ namespace DOL.GS {
                     //roll for an item for each player in the group
                     foreach (var groupPlayer in player.Group.GetNearbyPlayersInTheGroup(player))
                     {
-                        if(groupPlayer.GetDistance(player) > WorldMgr.VISIBILITY_DISTANCE)
+                        //Console.WriteLine("Group player count: " + player.Group.MemberCount + " Name: " + groupPlayer.Name);
+                        if (groupPlayer.GetDistance(player) > WorldMgr.VISIBILITY_DISTANCE)
                             continue;
                         
                         if (Util.Chance(chance) && numDrops < MaxDropCap)
                         {
-                            classForLoot = GetRandomClassFromGroup(player.Group);
-                            var item = GenerateItemTemplate(player, classForLoot, (byte)(mob.Level + 1), killedcon);
-                            loot.AddFixed(item, 1);
-                            numDrops++;
+                                Console.WriteLine("Make loot roll succeded!");
+                                classForLoot = GetRandomClassFromGroup(player.Group);
+                                var item = GenerateItemTemplate(player, classForLoot, (byte)(mob.Level + 1), killedcon);
+                                loot.AddFixed(item, 1);
+                                numDrops++;
                         }
                     }
 
@@ -124,16 +154,32 @@ namespace DOL.GS {
                         loot.AddFixed(item, 1);
                     }
 
+                    //Add Beads
                     if(player.Level < 50 || mob.Level < 50)
                     {
                         var item = AtlasROGManager.GenerateBeadOfRegeneration();
                         loot.AddRandom(2, item, 1);
                     }
-                    //classForLoot = GetRandomClassFromGroup(player.Group);
-                    //chance += 4 * player.Group.GetPlayersInTheGroup().Count; //4% extra drop chance per group member
+
+                    //Add Merchant Barrell
+                    if(player.Level <= mob.Level)
+                    {
+                        var item = AtlasROGManager.GenerateSummonMerchant();
+                        loot.AddRandom(2, item, 1);
+                    }
+
+                    if(true)
+                    {
+                        Console.WriteLine("Dropping Random Mimic");
+                        var item = AtlasROGManager.GenerateMimic(player.Realm);
+                        loot.AddRandom(5, item, 1);
+                    }
+
                 }
                 else
                 {
+                    //Solo Loot Roll
+                    //Console.WriteLine("Made it this far!");
                     int tmpChance = player.OutOfClassROGPercent > 0 ? player.OutOfClassROGPercent : 0;
                     if (player.Level == 50 && Util.Chance(tmpChance))
                     {
@@ -171,6 +217,13 @@ namespace DOL.GS {
                         item = AtlasROGManager.GenerateBeadOfRegeneration();
                         loot.AddRandom(2, item, 1);
                     }
+
+                    if (true)
+                    {
+                        Console.WriteLine("Dropping Random Mimic");
+                        item = AtlasROGManager.GenerateMimic(player.Realm);
+                        loot.AddRandom(5, item, 1);
+                    }
                 }
 
                 //chance = 100;
@@ -180,6 +233,7 @@ namespace DOL.GS {
             }
             catch
             {
+                Console.WriteLine("Everything failed; catch");
                 return loot;
             }
 
@@ -205,12 +259,31 @@ namespace DOL.GS {
         {
             List<eCharacterClass> validClasses = new List<eCharacterClass>();
 
-            foreach (GamePlayer player in group.GetMembersInTheGroup())
-            {
-                validClasses.Add((eCharacterClass)player.CharacterClass.ID);
-            }
-            eCharacterClass ranClass = validClasses[Util.Random(validClasses.Count - 1)];
+            //foreach (GamePlayer player in group.GetMembersInTheGroup())
+            //{
+            //    Console.WriteLine("Name: "+player.Name +" Class: "+ player.CharacterClass.Name);
+            //    validClasses.Add((eCharacterClass)player.CharacterClass.ID);
+            //}
 
+            Console.WriteLine("Making loot for the following classes: ");
+            foreach (var player in group.GetMembersInTheGroup())
+            {               
+                if (player is GamePlayer)
+                {
+                    GamePlayer p = (GamePlayer)player;
+                    Console.WriteLine("Player Name: " + p.Name + " Class: " + p.CharacterClass.Name);
+                    validClasses.Add((eCharacterClass)p.CharacterClass.ID);
+                }
+                else if (player is MimicNPC) 
+                {
+                    MimicNPC npc = (MimicNPC)player;
+                    Console.WriteLine("NPC Name: " + npc.Name + " Class: " + npc.CharacterClass.Name);
+                    validClasses.Add((eCharacterClass)npc.CharacterClass.ID);
+                }
+            }
+
+            Console.WriteLine("Classes found: " + validClasses.Count);
+            eCharacterClass ranClass = validClasses[Util.Random(validClasses.Count - 1)];
             return ranClass;
         }
         
