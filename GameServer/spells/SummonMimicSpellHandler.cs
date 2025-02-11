@@ -23,11 +23,8 @@ namespace DOL.GS.Spells
                 Point3D playerLocation = new Point3D(p.X, p.Y, p.Z);
                 eGender gender = Util.RandomBool() ? eGender.Male : eGender.Female;
                 string name = MimicNames.GetName(gender, p.Realm);
-                eSpecType spec = eSpecType.None;
 
-                double ClassID = m_spell.Value;
-
-                mimic = MimicManager.GetMimic((eMimicClass)ClassID, p.Level, name, gender, eSpecType.None, false);
+                mimic = MimicManager.GetMimic((eMimicClass)m_spell.Value, p.Level, name, gender, eSpecType.None, false);
                 //    case 1: //Paladin
                 //    case 2: //Armsman
                 //    case 3: //Scout
