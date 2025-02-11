@@ -7068,14 +7068,14 @@ namespace DOL.GS
             return casted;
         }
 
-        public override int CalculateCastingTime(SpellHandler spellHandler)
+        public override int CalculateCastingTime(SpellLine line, Spell spell)
         {
             int castTime;
 
-            if (!CharacterClass.CanChangeCastingSpeed(spellHandler.SpellLine, spellHandler.Spell))
-                castTime = spellHandler.Spell.CastTime;
+            if (!CharacterClass.CanChangeCastingSpeed(line, spell))
+                castTime = spell.CastTime;
             else
-                castTime = base.CalculateCastingTime(spellHandler);
+                castTime = base.CalculateCastingTime(line, spell);
 
             if (UseDetailedCombatLog)
                 Out.SendMessage($"Casting Speed: {castTime * 0.001:0.##}s", eChatType.CT_DamageAdd, eChatLoc.CL_SystemWindow);
