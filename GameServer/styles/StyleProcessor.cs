@@ -55,88 +55,88 @@ namespace DOL.GS.Styles
                 }
 
                 switch (style.AttackResultRequirement)
-				{
-					case Style.eAttackResultRequirement.Any: requiredAttackResult = eAttackResult.Any; break;
-					case Style.eAttackResultRequirement.Block: requiredAttackResult = eAttackResult.Blocked; break;
-					case Style.eAttackResultRequirement.Evade: requiredAttackResult = eAttackResult.Evaded; break;
-					case Style.eAttackResultRequirement.Fumble: requiredAttackResult = eAttackResult.Fumbled; break;
-					case Style.eAttackResultRequirement.Hit: requiredAttackResult = eAttackResult.HitUnstyled; break;
-					case Style.eAttackResultRequirement.Style: requiredAttackResult = eAttackResult.HitStyle; break;
-					case Style.eAttackResultRequirement.Miss: requiredAttackResult = eAttackResult.Missed; break;
-					case Style.eAttackResultRequirement.Parry: requiredAttackResult = eAttackResult.Parried; break;
-				}
+                {
+                    case Style.eAttackResultRequirement.Any: requiredAttackResult = eAttackResult.Any; break;
+                    case Style.eAttackResultRequirement.Block: requiredAttackResult = eAttackResult.Blocked; break;
+                    case Style.eAttackResultRequirement.Evade: requiredAttackResult = eAttackResult.Evaded; break;
+                    case Style.eAttackResultRequirement.Fumble: requiredAttackResult = eAttackResult.Fumbled; break;
+                    case Style.eAttackResultRequirement.Hit: requiredAttackResult = eAttackResult.HitUnstyled; break;
+                    case Style.eAttackResultRequirement.Style: requiredAttackResult = eAttackResult.HitStyle; break;
+                    case Style.eAttackResultRequirement.Miss: requiredAttackResult = eAttackResult.Missed; break;
+                    case Style.eAttackResultRequirement.Parry: requiredAttackResult = eAttackResult.Parried; break;
+                }
 
                 switch (style.OpeningRequirementType)
                 {
                     case Style.eOpening.Offensive:
-                    // Style required before this one?
-                    if (style.OpeningRequirementValue != 0
-                        && (lastAttackData == null
-                        || lastAttackData.AttackResult != eAttackResult.HitStyle
-                        || lastAttackData.Style == null
-                        || lastAttackData.Style.ID != style.OpeningRequirementValue
-                        /*|| lastAD.Target != target*/)) // style chains are *NOT* possible only on the same target
-                        return false;
-
-                    // Last attack result.
-                    eAttackResult lastRes = (lastAttackData != null) ? lastAttackData.AttackResult : eAttackResult.Any;
-
-                    if (requiredAttackResult != eAttackResult.Any && lastRes != requiredAttackResult)
-                        return false;
-
-						break;
-					case Style.eOpening.Defensive:
-						AttackData targetsLastAD = target.attackComponent.attackAction.LastAttackData;
-
-                    // Last attack result.
-                    if (requiredAttackResult != eAttackResult.Any)
-                    {
-                        if (targetsLastAD == null || targetsLastAD.Target != living)
+                        // Style required before this one?
+                        if (style.OpeningRequirementValue != 0
+                            && (lastAttackData == null
+                            || lastAttackData.AttackResult != eAttackResult.HitStyle
+                            || lastAttackData.Style == null
+                            || lastAttackData.Style.ID != style.OpeningRequirementValue
+                            /*|| lastAD.Target != target*/)) // style chains are *NOT* possible only on the same target
                             return false;
 
-                        if (requiredAttackResult != eAttackResult.HitStyle && targetsLastAD.AttackResult != requiredAttackResult)
-                            return false;
-                        else if (requiredAttackResult == eAttackResult.HitStyle && targetsLastAD.Style == null)
-                            return false;
-                    }
+                        // Last attack result.
+                        eAttackResult lastRes = (lastAttackData != null) ? lastAttackData.AttackResult : eAttackResult.Any;
 
-                    break;
+                        if (requiredAttackResult != eAttackResult.Any && lastRes != requiredAttackResult)
+                            return false;
+
+                        break;
+                    case Style.eOpening.Defensive:
+                        AttackData targetsLastAD = target.attackComponent.attackAction.LastAttackData;
+
+                        // Last attack result.
+                        if (requiredAttackResult != eAttackResult.Any)
+                        {
+                            if (targetsLastAD == null || targetsLastAD.Target != living)
+                                return false;
+
+                            if (requiredAttackResult != eAttackResult.HitStyle && targetsLastAD.AttackResult != requiredAttackResult)
+                                return false;
+                            else if (requiredAttackResult == eAttackResult.HitStyle && targetsLastAD.Style == null)
+                                return false;
+                        }
+
+                        break;
 
                     case Style.eOpening.Positional:
-                    if (!living.IsObjectInFront(target, 120))
-                        return false;
-
-                    // You can't use positional styles on keep doors or walls.
-                    if ((target is GameKeepComponent || target is GameKeepDoor) && (Style.eOpeningPosition)style.OpeningRequirementValue != Style.eOpeningPosition.Front)
-                        return false;
-
-                    float angle = target.GetAngle(living);
-
-                    switch ((Style.eOpeningPosition)style.OpeningRequirementValue)
-                    {
-                        //Back Styles
-                        //60 degree since 1.62 patch
-                        case Style.eOpeningPosition.Back:
-                        if (!(angle > 150 && angle < 210))
+                        if (!living.IsObjectInFront(target, 120))
                             return false;
-                        break;
-                        // Side Styles
-                        //105 degree since 1.62 patch
-                        // Atlas change: 90 degrees
-                        case Style.eOpeningPosition.Side:
-                        if (!(angle >= 60 && angle <= 150) && !(angle >= 210 && angle <= 300))
-                            return false;
-                        break;
-                        // Front Styles
-                        // 90 degree
-                        // Atlas change: 120 degrees
-                        case Style.eOpeningPosition.Front:
-                        if (!(angle > 300 || angle < 60))
-                            return false;
-                        break;
-                    }
 
-                    break;
+                        // You can't use positional styles on keep doors or walls.
+                        if ((target is GameKeepComponent || target is GameKeepDoor) && (Style.eOpeningPosition)style.OpeningRequirementValue != Style.eOpeningPosition.Front)
+                            return false;
+
+                        float angle = target.GetAngle(living);
+
+                        switch ((Style.eOpeningPosition)style.OpeningRequirementValue)
+                        {
+                            //Back Styles
+                            //60 degree since 1.62 patch
+                            case Style.eOpeningPosition.Back:
+                                if (!(angle > 150 && angle < 210))
+                                    return false;
+                                break;
+                            // Side Styles
+                            //105 degree since 1.62 patch
+                            // Atlas change: 90 degrees
+                            case Style.eOpeningPosition.Side:
+                                if (!(angle >= 60 && angle <= 150) && !(angle >= 210 && angle <= 300))
+                                    return false;
+                                break;
+                            // Front Styles
+                            // 90 degree
+                            // Atlas change: 120 degrees
+                            case Style.eOpeningPosition.Front:
+                                if (!(angle > 300 || angle < 60))
+                                    return false;
+                                break;
+                        }
+
+                        break;
                 }
 
                 if (style.StealthRequirement && !living.IsStealthed)
@@ -183,10 +183,10 @@ namespace DOL.GS.Styles
                     return;
                 }
 
-				// Put player into attack state before setting the styles.
-				// Changing the attack state clears out the styles.
-				if (player.attackComponent.AttackState == false || EffectListService.GetEffectOnTarget(player, eEffect.Engage) != null)
-					player.attackComponent.RequestStartAttack();
+                // Put player into attack state before setting the styles.
+                // Changing the attack state clears out the styles.
+                if (player.attackComponent.AttackState == false || EffectListService.GetEffectOnTarget(player, eEffect.Engage) != null)
+                    player.attackComponent.RequestStartAttack();
 
                 if (player.TargetObject == null)
                 {
@@ -206,11 +206,11 @@ namespace DOL.GS.Styles
                     return;
                 }
 
-				bool automaticStyleUsed = false;
-				if (Properties.AUTO_SELECT_OPENING_STYLE && style.OpeningRequirementType != Style.eOpening.Positional)
-				{
-					AttackData lastAttackData = player.attackComponent.attackAction.LastAttackData;
-					Style styleToUse = style;
+                bool automaticStyleUsed = false;
+                if (Properties.AUTO_SELECT_OPENING_STYLE && style.OpeningRequirementType != Style.eOpening.Positional)
+                {
+                    AttackData lastAttackData = player.attackComponent.attackAction.LastAttackData;
+                    Style styleToUse = style;
 
                     while (!CanUseStyle(lastAttackData, player, styleToUse, weapon))
                     {
@@ -237,21 +237,21 @@ namespace DOL.GS.Styles
                 if (!Properties.AUTO_SELECT_OPENING_STYLE && style.OpeningRequirementType == Style.eOpening.Offensive && style.AttackResultRequirement == Style.eAttackResultRequirement.Style)
                     preRequireStyle = SkillBase.GetStyleByID(style.OpeningRequirementValue, player.CharacterClass.ID);
 
-				// We have not set any primary style yet?
-				if (player.styleComponent.NextCombatStyle == null)
-				{
-					if (preRequireStyle != null)
-					{
-						AttackData lastAD = player.attackComponent.attackAction.LastAttackData;
-						if (lastAD == null
-							|| lastAD.AttackResult != eAttackResult.HitStyle
-							|| lastAD.Style == null
-							|| lastAD.Style.ID != style.OpeningRequirementValue)
-						{
-							player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.PerformStyleBefore", preRequireStyle.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
-							return;
-						}
-					}
+                // We have not set any primary style yet?
+                if (player.styleComponent.NextCombatStyle == null)
+                {
+                    if (preRequireStyle != null)
+                    {
+                        AttackData lastAD = player.attackComponent.attackAction.LastAttackData;
+                        if (lastAD == null
+                            || lastAD.AttackResult != eAttackResult.HitStyle
+                            || lastAD.Style == null
+                            || lastAD.Style.ID != style.OpeningRequirementValue)
+                        {
+                            player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.PerformStyleBefore", preRequireStyle.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+                            return;
+                        }
+                    }
 
                     player.styleComponent.NextCombatStyle = style;
                     player.styleComponent.NextCombatBackupStyle = null;
@@ -267,36 +267,36 @@ namespace DOL.GS.Styles
                             effect.Cancel(false, true);
                     }
 
-					// Unstealth only on primary style to not break stealth with non-stealth backup styles.
-					if (!style.StealthRequirement)
-						player.Stealth(false);
-				}
-				else
-				{
-					// Have we also set the backupstyle already?
-					if (player.styleComponent.NextCombatBackupStyle != null)
-						// All styles set, can't change anything now.
-						player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.AlreadySelectedStyles"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
-					else
-					{
-						// Have we pressed the same style button used for the primary style again?
-						if (player.styleComponent.NextCombatStyle.ID == style.ID)
-						{
-							if (player.styleComponent.CancelStyle)
-							{
-								// If yes, we cancel the style.
-								player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.NoLongerPreparing", player.styleComponent.NextCombatStyle.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
-								player.styleComponent.NextCombatStyle = null;
-								player.styleComponent.NextCombatBackupStyle = null;
-							}
-							else
-								player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.AlreadyPreparing"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
-						}
-						else
-						{
-							if (preRequireStyle != null)
-							{
-								AttackData lastAD = player.attackComponent.attackAction.LastAttackData;
+                    // Unstealth only on primary style to not break stealth with non-stealth backup styles.
+                    if (!style.StealthRequirement)
+                        player.Stealth(false);
+                }
+                else
+                {
+                    // Have we also set the backupstyle already?
+                    if (player.styleComponent.NextCombatBackupStyle != null)
+                        // All styles set, can't change anything now.
+                        player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.AlreadySelectedStyles"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+                    else
+                    {
+                        // Have we pressed the same style button used for the primary style again?
+                        if (player.styleComponent.NextCombatStyle.ID == style.ID)
+                        {
+                            if (player.styleComponent.CancelStyle)
+                            {
+                                // If yes, we cancel the style.
+                                player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.NoLongerPreparing", player.styleComponent.NextCombatStyle.Name), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+                                player.styleComponent.NextCombatStyle = null;
+                                player.styleComponent.NextCombatBackupStyle = null;
+                            }
+                            else
+                                player.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.TryToUseStyle.AlreadyPreparing"), eChatType.CT_System, eChatLoc.CL_SystemWindow);
+                        }
+                        else
+                        {
+                            if (preRequireStyle != null)
+                            {
+                                AttackData lastAD = player.attackComponent.attackAction.LastAttackData;
 
                                 if (lastAD == null
                                     || lastAD.AttackResult != eAttackResult.HitStyle
@@ -320,11 +320,11 @@ namespace DOL.GS.Styles
             }
         }
 
-		public static bool ExecuteStyle(GameLiving living, GameLiving target, Style style, DbInventoryItem weapon, double unstyledDamage, double unstyledDamageCap, eArmorSlot armorHitLocation, List<ISpellHandler> styleEffects, out double styleDamage, out double styleDamageCap, out int animationId)
-		{
-			styleDamage = 0;
-			styleDamageCap = 0;
-			animationId = 0;
+        public static bool ExecuteStyle(GameLiving living, GameLiving target, Style style, DbInventoryItem weapon, double unstyledDamage, double unstyledDamageCap, eArmorSlot armorHitLocation, List<ISpellHandler> styleEffects, out double styleDamage, out double styleDamageCap, out int animationId)
+        {
+            styleDamage = 0;
+            styleDamageCap = 0;
+            animationId = 0;
 
             // First thing in processors, lock the objects you modify.
             // This way it makes sure the objects are not modified by several different threads at the same time.
@@ -349,81 +349,81 @@ namespace DOL.GS.Styles
                         player.Endurance -= CalculateEnduranceCost(living, style, weapon.SPD_ABS);
                 }
 
-				AttackData lastAttackData = living.attackComponent.attackAction.LastAttackData;
+                AttackData lastAttackData = living.attackComponent.attackAction.LastAttackData;
 
-				// Did primary and backup style fail?
-				if (!CanUseStyle(lastAttackData, living, style, weapon))
-				{
-					player?.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.ExecuteStyle.ExecuteFail", style.Name), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
-					return false;
-				}
-				else
-				{
-					double spec = living.GetModifiedSpecLevel(style.Spec);
+                // Did primary and backup style fail?
+                if (!CanUseStyle(lastAttackData, living, style, weapon))
+                {
+                    player?.Out.SendMessage(LanguageMgr.GetTranslation(player.Client.Account.Language, "StyleProcessor.ExecuteStyle.ExecuteFail", style.Name), eChatType.CT_YouHit, eChatLoc.CL_SystemWindow);
+                    return false;
+                }
+                else
+                {
+                    double spec = living.GetModifiedSpecLevel(style.Spec);
 
-					// Stealth openers are unaffected by weapon speed.
-					if (style.StealthRequirement)
-					{
-						switch (style.ID)
-						{
-							case 335: //Backstab I
-							{
-								//Backstab I Cap = ~5 + Critical Strike Spec *14 / 3 + Nonstyle Cap
-								styleDamage = Math.Min(5, spec / 10.0) + spec * 14 / 3.0;
-								break;
-							}
-							case 339: //Backstab II
-							{
-								//Backstab II Cap = 45 + Critical Strike Spec *6 + Nonstyle Cap
-								styleDamage = Math.Min(45, spec) + spec * 6;
-								break;
-							}
-							case 343: //Perforate Artery
-							{
-								if (living.ActiveWeapon.Item_Type == Slot.TWOHAND)
-								{
-									//Perforate Artery 2h Cap = 75 + Critical Strike Spec * 12 + Nonstyle Cap
-									styleDamage = Math.Min(75, spec * 1.5) + spec * 12;
-								}
-								else
-								{
-									//Perforate Artery Cap = 75 + Critical Strike Spec *9 + Nonstyle Cap
-									styleDamage = Math.Min(75, spec * 1.5) + spec * 9;
-								}
+                    // Stealth openers are unaffected by weapon speed.
+                    if (style.StealthRequirement)
+                    {
+                        switch (style.ID)
+                        {
+                            case 335: //Backstab I
+                                {
+                                    //Backstab I Cap = ~5 + Critical Strike Spec *14 / 3 + Nonstyle Cap
+                                    styleDamage = Math.Min(5, spec / 10.0) + spec * 14 / 3.0;
+                                    break;
+                                }
+                            case 339: //Backstab II
+                                {
+                                    //Backstab II Cap = 45 + Critical Strike Spec *6 + Nonstyle Cap
+                                    styleDamage = Math.Min(45, spec) + spec * 6;
+                                    break;
+                                }
+                            case 343: //Perforate Artery
+                                {
+                                    if (living.ActiveWeapon.Item_Type == Slot.TWOHAND)
+                                    {
+                                        //Perforate Artery 2h Cap = 75 + Critical Strike Spec * 12 + Nonstyle Cap
+                                        styleDamage = Math.Min(75, spec * 1.5) + spec * 12;
+                                    }
+                                    else
+                                    {
+                                        //Perforate Artery Cap = 75 + Critical Strike Spec *9 + Nonstyle Cap
+                                        styleDamage = Math.Min(75, spec * 1.5) + spec * 9;
+                                    }
 
-								break;
-							}
-						}
+                                    break;
+                                }
+                        }
 
-						// Styles with a static growth don't use unstyled damage, so armor has to be taken into account here.
-						DbInventoryItem armor = target.Inventory?.GetItem((eInventorySlot) armorHitLocation);
-						styleDamage = styleDamage * (1.0 - target.GetArmorAbsorb(armorHitLocation));
-						styleDamageCap = -1; // Uncapped. Is there supposed to be one?
-					}
-					else
-					{
-						double growthRate = style.GrowthRate;
-						double attackSpeed = living.attackComponent.AttackSpeed(weapon) * 0.001;
-						double modifiedGrowthRate = growthRate * spec * attackSpeed / unstyledDamageCap;
-						styleDamage = modifiedGrowthRate * unstyledDamage;
-						styleDamageCap = modifiedGrowthRate * unstyledDamageCap;
+                        // Styles with a static growth don't use unstyled damage, so armor has to be taken into account here.
+                        DbInventoryItem armor = target.Inventory?.GetItem((eInventorySlot)armorHitLocation);
+                        styleDamage = styleDamage * (1.0 - target.GetArmorAbsorb(armorHitLocation));
+                        styleDamageCap = -1; // Uncapped. Is there supposed to be one?
+                    }
+                    else
+                    {
+                        double growthRate = style.GrowthRate;
+                        double attackSpeed = living.attackComponent.AttackSpeed(weapon) * 0.001;
+                        double modifiedGrowthRate = growthRate * spec * attackSpeed / unstyledDamageCap;
+                        styleDamage = modifiedGrowthRate * unstyledDamage;
+                        styleDamageCap = modifiedGrowthRate * unstyledDamageCap;
 
-						// Force styles do at least 1 damage to make level 2 styles actually do something.
-						// Don't forget to ignore the cap. Do it only if the style has a GR.
-						if (styleDamage < 1 && growthRate > 0)
-						{
-							styleDamage = 1;
-							styleDamageCap = 0;
-						}
-					}
+                        // Force styles do at least 1 damage to make level 2 styles actually do something.
+                        // Don't forget to ignore the cap. Do it only if the style has a GR.
+                        if (styleDamage < 1 && growthRate > 0)
+                        {
+                            styleDamage = 1;
+                            styleDamageCap = 0;
+                        }
+                    }
 
-					if (player != null)
-						styleDamage = styleDamage * player.GetModified(eProperty.StyleDamage) * 0.01;
+                    if (player != null)
+                        styleDamage = styleDamage * player.GetModified(eProperty.StyleDamage) * 0.01;
 
-					// Style absorb bonus.
-					if (target is IGamePlayer)
-					{
-						int absorb = target.GetModified(eProperty.StyleAbsorb);
+                    // Style absorb bonus.
+                    if (target is IGamePlayer)
+                    {
+                        int absorb = target.GetModified(eProperty.StyleAbsorb);
 
                         if (absorb > 0)
                         {
@@ -528,10 +528,10 @@ namespace DOL.GS.Styles
             //[StephenxPimentel]
             //1.108 - Valhallas Blessing now has a 75% chance to not use endurance.
 
-			// Apply Valkyrie RA5L effect
-			ValhallasBlessingEffect ValhallasBlessing = living.EffectList.GetOfType<ValhallasBlessingEffect>();
-			if (ValhallasBlessing != null && Util.Chance(75)) 
-				return 0;
+            // Apply Valkyrie RA5L effect
+            ValhallasBlessingEffect ValhallasBlessing = living.EffectList.GetOfType<ValhallasBlessingEffect>();
+            if (ValhallasBlessing != null && Util.Chance(75))
+                return 0;
 
             //Camelot Herald 1.90 : Battlemaster styles will now cost a flat amount of Endurance, regardless of weapon speed
             if (style.Spec == Specs.Battlemaster)
@@ -545,75 +545,77 @@ namespace DOL.GS.Styles
             return Math.Max(1, fatCost);
         }
 
-		/// <summary>
-		/// Returns whether player has correct weapon
-		/// active for particular style
-		/// </summary>
-		/// <param name="style">The style to execute</param>
-		/// <param name="living">The living wanting to execute the style</param>
-		/// <param name="weapon">The weapon used to execute the style</param>
-		/// <returns>true if correct weapon active</returns>
-		protected static bool CheckWeaponType(Style style, GameLiving living, DbInventoryItem weapon)
-		{
-			if (living is GameNPC && living is not MimicNPC)
-				return true;
+        /// <summary>
+        /// Returns whether player has correct weapon
+        /// active for particular style
+        /// </summary>
+        /// <param name="style">The style to execute</param>
+        /// <param name="living">The living wanting to execute the style</param>
+        /// <param name="weapon">The weapon used to execute the style</param>
+        /// <returns>true if correct weapon active</returns>
+        protected static bool CheckWeaponType(Style style, GameLiving living, DbInventoryItem weapon)
+        {
+            if (living is GameNPC && living is not MimicNPC)
+                return true;
 
             IGamePlayer player = living as IGamePlayer;
 
-			if (player == null)
-				return false;
+            if (player == null)
+                return false;
 
             switch (style.WeaponTypeRequirement)
             {
                 case Style.SpecialWeaponType.DualWield:
-                // both weapons are needed to use style,
-                // shield is not a weapon here
-                DbInventoryItem rightHand = living.ActiveWeapon;
-                DbInventoryItem leftHand = living.Inventory.GetItem(eInventorySlot.LeftHandWeapon);
+                    // both weapons are needed to use style,
+                    // shield is not a weapon here
+                    DbInventoryItem rightHand = living.ActiveWeapon;
+                    DbInventoryItem leftHand = living.Inventory.GetItem(eInventorySlot.LeftHandWeapon);
 
-                if (rightHand == null || leftHand == null || (rightHand.Item_Type != Slot.RIGHTHAND && rightHand.Item_Type != Slot.LEFTHAND))
-                    return false;
+                    if (rightHand == null || leftHand == null || (rightHand.Item_Type != Slot.RIGHTHAND && rightHand.Item_Type != Slot.LEFTHAND))
+                        return false;
 
-                if (style.Spec == Specs.HandToHand && (rightHand.Object_Type != (int)eObjectType.HandToHand || leftHand.Object_Type != (int)eObjectType.HandToHand))
-                    return false;
-                else if (style.Spec == Specs.Fist_Wraps && (rightHand.Object_Type != (int)eObjectType.FistWraps || leftHand.Object_Type != (int)eObjectType.FistWraps))
-                    return false;
+                    if (style.Spec == Specs.HandToHand && (rightHand.Object_Type != (int)eObjectType.HandToHand || leftHand.Object_Type != (int)eObjectType.HandToHand))
+                        return false;
+                    else if (style.Spec == Specs.Fist_Wraps && (rightHand.Object_Type != (int)eObjectType.FistWraps || leftHand.Object_Type != (int)eObjectType.FistWraps))
+                        return false;
 
-                return leftHand.Object_Type != (int)eObjectType.Shield;
+                    return leftHand.Object_Type != (int)eObjectType.Shield;
 
                 case Style.SpecialWeaponType.AnyWeapon:
-                // TODO: style can be used with any weapon type,
-                // shield is not a weapon here
-                return weapon != null;
+                    // TODO: style can be used with any weapon type,
+                    // shield is not a weapon here
+                    return weapon != null;
 
                 default:
-                // WeaponTypeRequirement holds eObjectType of weapon needed for style
-                // no weapon = can't use style
-                if (weapon == null)
-                    return false;
+                    // WeaponTypeRequirement holds eObjectType of weapon needed for style
+                    // no weapon = can't use style
+                    if (weapon == null)
+                        return false;
 
-                // can't use shield styles if no active weapon
-                if (style.WeaponTypeRequirement == (int)eObjectType.Shield
-                    && (living.ActiveWeapon == null || (living.ActiveWeapon.Item_Type != Slot.RIGHTHAND && living.ActiveWeapon.Item_Type != Slot.LEFTHAND)))
-                    return false;
+                    // can't use shield styles if no active weapon
+                    if (style.WeaponTypeRequirement == (int)eObjectType.Shield
+                        && (living.ActiveWeapon == null || (living.ActiveWeapon.Item_Type != Slot.RIGHTHAND && living.ActiveWeapon.Item_Type != Slot.LEFTHAND)))
+                        return false;
 
-					eObjectType objectType = (eObjectType) weapon.Object_Type;
+                    eObjectType objectType = (eObjectType)weapon.Object_Type;
 
-					// Treat a left axe as a normal axe.
-					if ((eObjectType) weapon.Object_Type is eObjectType.LeftAxe)
-						objectType = eObjectType.Axe;
+                    // Treat a left axe as a normal axe.
+                    if ((eObjectType)weapon.Object_Type is eObjectType.LeftAxe)
+                        objectType = eObjectType.Axe;
 
-					// Weapon type check.
-					return GameServer.ServerRules.IsObjectTypesEqual(weaponTypeRequirement, objectType);
-				}
-			}
-		}
-                // weapon type check
-                return GameServer.ServerRules.IsObjectTypesEqual(
-                        (eObjectType)style.WeaponTypeRequirement,
-                        (eObjectType)weapon.Object_Type);
+                    // weapon type check
+                    return GameServer.ServerRules.IsObjectTypesEqual(
+                            (eObjectType)style.WeaponTypeRequirement,
+                            (eObjectType)weapon.Object_Type);
+
+                    // Weapon type check.
+                    //return GameServer.ServerRules.IsObjectTypesEqual(weaponTypeRequirement, objectType);
             }
         }
+    
+
+            
+
 
 		/// <summary>
 		/// Add the magical effect to target
